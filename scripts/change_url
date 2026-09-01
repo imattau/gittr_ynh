@@ -1,0 +1,18 @@
+#!/bin/bash
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+ynh_script_progression "Stopping services"
+ynh_systemd_action --service_name="$app-ui" --action="stop" --log_path="systemd"
+
+ynh_script_progression "Updating NGINX configuration"
+ynh_change_url_nginx_config
+
+ynh_script_progression "Updating systemd configuration"
+ynh_add_systemd_config --service="$app-ui" --template="systemd-ui.service"
+
+ynh_script_progression "Starting services"
+ynh_systemd_action --service_name="$app-ui" --action="start" --log_path="systemd"
+
+ynh_script_progression "Change of URL completed"

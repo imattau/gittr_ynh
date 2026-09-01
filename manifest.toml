@@ -1,0 +1,64 @@
+packaging_format = 2
+
+id = "gittr"
+name = "gittr"
+description.en = "Self-hosted git forge on Nostr (NIP-34), with the gitnostr bridge for SSH/HTTPS git access"
+
+version = "0.1~ynh1"
+
+maintainers = ["imattau"]
+
+[upstream]
+license = "AGPL-3.0"
+website = "https://gittr.space"
+code = "https://github.com/arbadacarbaYK/gittr"
+
+[integration]
+yunohost = ">= 11.2"
+architectures = "all"
+multi_instance = false
+ldap = false
+sso = false
+disk = "1G"
+ram.build = "2G"
+ram.runtime = "512M"
+
+[install]
+    [install.domain]
+    type = "domain"
+
+    [install.path]
+    type = "path"
+    default = "/"
+
+    [install.admin]
+    type = "user"
+
+    [install.git_ssh_port]
+    type = "number"
+    default = 2225
+    help.en = "Port for git-nostr-ssh, kept separate from the server's admin SSH (22)."
+
+    [install.nostr_relays]
+    type = "string"
+    default = "wss://relay.damus.io,wss://nos.lol"
+    help.en = "Comma-separated relay list the bridge and UI will use."
+
+    [install.repo_owner_pubkey]
+    type = "string"
+    help.en = "Hex nostr pubkey allowed to own/create repos on this bridge."
+
+[resources]
+    [resources.system_user]
+
+    [resources.install_dir]
+
+    [resources.ports]
+        [resources.ports.git_ssh]
+        default = 2225
+
+    [resources.apt]
+        packages = "git, build-essential, sqlite3"
+
+    [resources.database]
+        # not used — bridge uses sqlite on disk, no MySQL/Postgres needed

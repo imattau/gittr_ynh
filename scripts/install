@@ -1,0 +1,50 @@
+#!/bin/bash
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+ynh_script_progression "Validating installation parameters"
+# domain, path, admin, git_ssh_port, nostr_relays, repo_owner_pubkey
+# are already resolved into env vars by the resource system
+
+ynh_script_progression "Setting up source files"
+ynh_setup_source --dest_dir="$install_dir"
+
+ynh_script_progression "Installing Go toolchain (pinned)"
+ynh_setup_source --source_id="go" --dest_dir="$install_dir/.go"
+
+ynh_script_progression "Building git-nostr-bridge"
+pushd "$install_dir/ui/gitnostr"
+	PATH="$install_dir/.go/bin:$PATH" make git-nostr-bridge git-nostr-ssh git-nostr-cli
+popd
+
+ynh_script_progression "Installing Node and building the UI"
+ynh_exec_warn_less ynh_install_nodejs --nodejs_version=$NODEJS_VERSION
+pushd "$install_dir/ui"
+	ynh_use_nodejs
+	ynh_exec_warn_less npm ci
+	ynh_exec_warn_less npm run build
+popd
+
+ynh_script_progression "Writing bridge config"
+ynh_add_config --template="bridge-config.json.j2" \
+	--destination="$install_dir/ui/gitnostr/config.json"
+
+ynh_script_progression "Configuring systemd services"
+ynh_add_systemd_config --service="$app-ui" --template="systemd-ui.service"
+ynh_add_systemd_config --service="$app-bridge" --template="systemd-bridge.service"
+
+ynh_script_progression "Configuring NGINX"
+ynh_add_nginx_config
+
+ynh_script_progression "Setting permissions"
+chown -R "$app:$app" "$install_dir"
+# lock down authorized_keys handling per upstream warning
+chmod 700 "/home/$app/.ssh" 2>/dev/null || true
+
+ynh_script_progression "Enabling and starting services"
+yunohost service add "$app-bridge" --description="gitnostr bridge (git SSH/HTTPS)" --log="/var/log/$app/bridge.log"
+ynh_systemd_action --service_name="$app-bridge" --action="start" --log_path="systemd"
+ynh_systemd_action --service_name="$app-ui" --action="start" --log_path="systemd"
+
+ynh_script_progression "Installation complete"

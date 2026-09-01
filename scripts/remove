@@ -1,0 +1,20 @@
+#!/bin/bash
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+ynh_script_progression "Stopping and removing services"
+ynh_remove_systemd_config --service="$app-ui"
+ynh_remove_systemd_config --service="$app-bridge"
+yunohost service remove "$app-bridge" 2>/dev/null || true
+
+ynh_script_progression "Removing NGINX configuration"
+ynh_remove_nginx_config
+
+ynh_script_progression "Removing app main directory"
+ynh_secure_remove --file="$install_dir"
+
+ynh_script_progression "Removing dependencies"
+ynh_remove_nodejs
+
+ynh_script_progression "Removal complete"

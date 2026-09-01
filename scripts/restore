@@ -1,0 +1,29 @@
+#!/bin/bash
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+ynh_script_progression "Restoring the app main directory"
+ynh_restore_file --origin_path="$install_dir"
+
+ynh_script_progression "Recreating the dedicated system user"
+ynh_system_user_create --username="$app" --home_dir="$install_dir"
+chown -R "$app:$app" "$install_dir"
+
+ynh_script_progression "Restoring NGINX configuration"
+ynh_restore_file --origin_path="/etc/nginx/conf.d/$domain.d/$app.conf"
+
+ynh_script_progression "Restoring systemd configuration"
+ynh_restore_file --origin_path="/etc/systemd/system/$app-ui.service"
+ynh_restore_file --origin_path="/etc/systemd/system/$app-bridge.service"
+systemctl enable "$app-ui.service" "$app-bridge.service" --quiet
+
+ynh_script_progression "Reinstalling Node.js"
+ynh_install_nodejs --nodejs_version=$NODEJS_VERSION
+
+ynh_script_progression "Starting services"
+yunohost service add "$app-bridge" --description="gitnostr bridge (git SSH/HTTPS)" --log="/var/log/$app/bridge.log"
+ynh_systemd_action --service_name="$app-bridge" --action="start" --log_path="systemd"
+ynh_systemd_action --service_name="$app-ui" --action="start" --log_path="systemd"
+
+ynh_script_progression "Restore complete"

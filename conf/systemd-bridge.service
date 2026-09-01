@@ -1,0 +1,16 @@
+[Unit]
+Description=gittr — gitnostr bridge (git-nostr-bridge)
+After=network.target
+
+[Service]
+Type=simple
+User=__APP__
+Group=__APP__
+WorkingDirectory=__INSTALL_DIR__/ui/gitnostr
+ExecStart=__INSTALL_DIR__/ui/gitnostr/bin/git-nostr-bridge
+Restart=on-failure
+RestartSec=5
+Environment=HOME=__INSTALL_DIR__
+
+[Install]
+WantedBy=multi-user.target

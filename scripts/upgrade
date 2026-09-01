@@ -1,0 +1,43 @@
+#!/bin/bash
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+ynh_script_progression "Stopping services"
+ynh_systemd_action --service_name="$app-ui" --action="stop" --log_path="systemd"
+ynh_systemd_action --service_name="$app-bridge" --action="stop" --log_path="systemd"
+
+ynh_script_progression "Updating source files"
+ynh_setup_source --dest_dir="$install_dir" --keep="ui/gitnostr/config.json data"
+
+ynh_script_progression "Rebuilding git-nostr-bridge"
+pushd "$install_dir/ui/gitnostr"
+	PATH="$install_dir/.go/bin:$PATH" make git-nostr-bridge git-nostr-ssh git-nostr-cli
+popd
+
+ynh_script_progression "Rebuilding the UI"
+pushd "$install_dir/ui"
+	ynh_use_nodejs
+	ynh_exec_warn_less npm ci
+	ynh_exec_warn_less npm run build
+popd
+
+ynh_script_progression "Updating bridge config"
+ynh_add_config --template="bridge-config.json.j2" \
+	--destination="$install_dir/ui/gitnostr/config.json"
+
+ynh_script_progression "Updating systemd configuration"
+ynh_add_systemd_config --service="$app-ui" --template="systemd-ui.service"
+ynh_add_systemd_config --service="$app-bridge" --template="systemd-bridge.service"
+
+ynh_script_progression "Updating NGINX configuration"
+ynh_add_nginx_config
+
+ynh_script_progression "Setting permissions"
+chown -R "$app:$app" "$install_dir"
+
+ynh_script_progression "Starting services"
+ynh_systemd_action --service_name="$app-bridge" --action="start" --log_path="systemd"
+ynh_systemd_action --service_name="$app-ui" --action="start" --log_path="systemd"
+
+ynh_script_progression "Upgrade complete"

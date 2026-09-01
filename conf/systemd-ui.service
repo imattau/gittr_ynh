@@ -1,0 +1,18 @@
+[Unit]
+Description=gittr — Next.js web UI
+After=network.target __APP__-bridge.service
+Requires=__APP__-bridge.service
+
+[Service]
+Type=simple
+User=__APP__
+Group=__APP__
+WorkingDirectory=__INSTALL_DIR__/ui
+ExecStart=/usr/bin/node __INSTALL_DIR__/ui/node_modules/.bin/next start -p __PORT__
+Restart=on-failure
+RestartSec=5
+Environment=NEXT_PUBLIC_API_URL=https://__DOMAIN__
+Environment=NEXT_PUBLIC_NOSTR_RELAYS=__NOSTR_RELAYS__
+
+[Install]
+WantedBy=multi-user.target

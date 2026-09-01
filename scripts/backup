@@ -1,0 +1,21 @@
+#!/bin/bash
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+ynh_script_progression "Backing up the app main directory"
+ynh_backup --src_path="$install_dir"
+
+# TODO: repositories/ (bare repos) and data/git-nostr-db.sqlite live under
+# install_dir and are included above, but for busy instances this could get
+# large — consider excluding repositories/ and documenting a separate
+# git-based backup strategy for repo content.
+
+ynh_script_progression "Backing up NGINX configuration"
+ynh_backup --src_path="/etc/nginx/conf.d/$domain.d/$app.conf"
+
+ynh_script_progression "Backing up systemd configuration"
+ynh_backup --src_path="/etc/systemd/system/$app-ui.service"
+ynh_backup --src_path="/etc/systemd/system/$app-bridge.service"
+
+ynh_script_progression "Backup complete"
