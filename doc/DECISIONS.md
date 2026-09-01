@@ -454,3 +454,36 @@ declared `helpers_version` at all. Worth being explicit about since it
 means passing the linter here proves nothing about this whole class of
 bug; only reading the actual v2.1 source (as done now, comprehensively)
 or an actual install/backup/restore run against a real instance can.
+
+## 12. `corepack prepare yarn@stable` resolves to the wrong Yarn entirely
+
+Third real-install failure, one step past item 11's fix (Go built cleanly
+this time — both `git-nostr-bridge` and `git-nostr-ssh` — and every
+`ynh_config_*`/`ynh_systemctl` call worked):
+
+```
+➤ YN0087: Migrated your project to the latest Yarn version 🚀
+➤ YN0000: · Yarn 4.18.0
+...
+➤ YN0028: │ The lockfile would have been modified by this install, which is explicitly forbidden.
+➤ YN0000: · Failed with errors in 11s 722ms
+```
+
+`ui/yarn.lock` starts `# yarn lockfile v1` — **Yarn Classic (1.x)**, not
+Berry, and there's no `.yarnrc.yml` or `packageManager` field in
+`package.json` to pin it automatically (checked both directly). But
+`corepack prepare yarn@stable --activate` resolved to **Yarn 4.18.0**
+(Berry) — a different, incompatible tool with its own lockfile format.
+Berry's `yarn install` saw the v1 lockfile, silently rewrote it to Berry's
+format ("Migrated your project..."), and then refused to proceed anyway
+because `--frozen-lockfile` forbids exactly that kind of implicit
+modification.
+
+Fixed by pinning Yarn Classic explicitly rather than trusting `@stable`:
+`YARN_VERSION="1.22.22"` in `_common.sh` (the current `latest` dist-tag
+for the classic `yarn` npm package, confirmed via the registry rather than
+assumed), used as `corepack prepare yarn@$YARN_VERSION --activate` in both
+`scripts/install` and `scripts/upgrade`. `--frozen-lockfile` itself was
+already correct — it's the native Classic flag; the `YN0050 deprecated`
+warning seen in earlier reasoning about this only fires under Berry, which
+is precisely the tool we shouldn't have been running in the first place.

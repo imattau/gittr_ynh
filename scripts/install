@@ -55,7 +55,7 @@ ynh_config_add --template="ui-runtime.env.j2" \
 ynh_script_progression "Building the UI"
 pushd "$install_dir/ui"
 	corepack enable
-	corepack prepare yarn@stable --activate
+	corepack prepare yarn@$YARN_VERSION --activate
 	ynh_exec_and_print_stderr_only_if_error yarn install --frozen-lockfile
 	ynh_exec_and_print_stderr_only_if_error yarn build
 popd

@@ -9,6 +9,14 @@
 # [resources.sources.main] url/sha256 (see doc/DECISIONS.md item 1) —
 # not here, so upgrading the pin means editing the manifest, not this file.
 
+# ui/yarn.lock is "yarn lockfile v1" — Yarn Classic (1.x), not Berry (no
+# .yarnrc.yml, no packageManager field in package.json to pin it
+# automatically). `corepack prepare yarn@stable` resolves to Berry (4.x)
+# these days, a different, incompatible tool — it rewrites the lockfile on
+# first `yarn install` and then refuses to proceed under --frozen-lockfile.
+# Pin Classic explicitly instead. See doc/DECISIONS.md item 12.
+YARN_VERSION="1.22.22"
+
 # Paths, relative to $install_dir, used by more than one script.
 bridge_dir="ui/gitnostr"
 bridge_config_dir=".config/git-nostr"
