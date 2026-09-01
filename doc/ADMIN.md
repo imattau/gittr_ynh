@@ -177,18 +177,26 @@ Same URL format as SSH, just `https://` instead of `ssh://`. Served by
 `git-http-backend` behind a dedicated `fcgiwrap` instance (its own
 socket-activated systemd unit — `gittr-fcgiwrap.socket` /
 `gittr-fcgiwrap.service` — not the shared system `fcgiwrap`, so this
-doesn't touch any other app's setup).
+doesn't touch any other app's setup). **Confirmed working live** —
+`git clone https://yourdomain/...` succeeds end to end.
 
-**⚠️ No private-repo enforcement over HTTPS.** Every repo is readable and
-writable over HTTPS regardless of its Nostr-level public/private setting
-— confirmed live, not a theoretical gap. The ACL endpoint this would need
-(`/api/git/http-auth`) doesn't exist in the pinned `v0.2.6` tag; it was
-added to upstream after that tag, with no newer tag yet. **SSH is
-unaffected** — `git-nostr-ssh` has its own independent, working
-owner/permission enforcement, untouched by any of this. If you have
-private repos, tell their owners to use SSH until this package's pin is
-bumped to a tag that ships the HTTPS ACL endpoint. See doc/DECISIONS.md
-item 18.
+**Clone/fetch only — `git push` over HTTPS returns 403, deliberately.**
+Confirmed live too. gittr's codebase never sets `http.receivepack`
+(checked), so `git-http-backend` refuses anonymous pushes by its own
+default, independent of anything this package configures. Left that
+alone on purpose rather than enabling it: this package also has **no
+private-repo enforcement over HTTPS** (every repo is readable regardless
+of its Nostr-level public/private setting — the ACL endpoint this would
+need, `/api/git/http-auth`, doesn't exist in the pinned `v0.2.6` tag, it
+was added to upstream after that tag with no newer tag yet). Turning on
+push too would mean anyone who knows a repo's URL could push to and
+overwrite it, with nothing checking who they are — materially worse than
+the read-side gap. **SSH is unaffected by any of this** —
+`git-nostr-ssh` has its own independent, working owner/permission
+enforcement for both read and push. If you have private repos, or need
+to push remotely at all, use SSH until this package's pin is bumped to a
+tag that ships the HTTPS ACL endpoint. See doc/DECISIONS.md items 18 and
+22.
 
 Originally descoped for v0.1 (see doc/DECISIONS.md item 3) as more surface
 than seemed worth it before SSH-only had even been proven working — added

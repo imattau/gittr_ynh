@@ -1044,3 +1044,39 @@ model was wrong from the start. Once the real per-domain log was found,
 this took one line to diagnose. The nginx error log — the *right* one —
 was always going to say exactly what was wrong; it just took three
 rounds to go looking for it instead of revising the socket config again.
+
+## 22. HTTPS git confirmed working — clone yes, push deliberately no
+
+Confirmed live, end to end, not just via a synthetic `curl` against a
+nonexistent repo this time:
+
+- `git clone https://.../<pubkey>/<repo>.git` on a real repo the user
+  created — succeeded cleanly (correctly warned "empty repository" for a
+  brand-new repo with nothing pushed yet, which is accurate).
+- `git push` on that same clone over HTTPS — **403**.
+
+Checked whether the 403 was a bug before deciding anything: gittr's
+codebase never sets `http.receivepack` anywhere (searched, zero results).
+That's a real, separate git setting from `GIT_HTTP_EXPORT_ALL` — the
+latter only affects whether a repo is discoverable/readable via the dumb
+HTTP protocol; `git-http-backend` refuses anonymous `receive-pack`
+(push) unless `http.receivepack=true` is set, as a safety default,
+independent of anything this package configures. Nothing in this
+package or upstream's code path currently sets it, so push is blocked by
+git's own default, not by anything broken.
+
+Given item 18's already-documented gap (no ACL layer at all for HTTPS,
+since the endpoint it would need doesn't exist in the pinned tag),
+**deliberately left this alone rather than setting
+`http.receivepack=true`** — asked the user rather than assuming. Setting
+it would mean literally anyone who knows a repo's clone URL could push
+to and overwrite it over HTTPS, with nothing checking who they are. Read
+access being unenforced (item 18) is already a real gap; adding
+unauthenticated write access on top of it would be a materially worse
+one, for a feature (`git push`) that wasn't even the original ask —
+"the suggested instruction on the website for git clone" was
+specifically about cloning. Push over HTTPS stays blocked until
+upstream ships the ACL endpoint and this package's pin can move to
+include it; SSH already has full, working owner/permission enforcement
+for push in the meantime and remains the way to write to a repo
+remotely.
