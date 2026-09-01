@@ -876,3 +876,51 @@ exists *at the pinned tag* — the same category of gap as trusting a
 helper name without checking which API generation is actually sourced
 (items 9–11). Docs describe the project's current `main`, not
 necessarily whatever tag a downstream packager happens to have pinned.
+
+## 19. HTTPS git: 500 gone, now a 502 — socket permissions
+
+The 500 from item 18 was fixed and confirmed live (no more auth_request
+error), but a request now got a **502 Bad Gateway** instead — nginx
+couldn't reach the fcgiwrap upstream at all. Asked for and got the actual
+socket state rather than guessing:
+
+```
+$ systemctl status gittr-fcgiwrap.socket
+Active: active (listening) ... Listen: /var/www/gittr/fcgiwrap.sock (Stream)
+$ ls -la /var/www/gittr/fcgiwrap.sock
+srw-r----- 1 gittr gittr 0 ... /var/www/gittr/fcgiwrap.sock
+```
+
+The socket unit was active and listening — but the socket file came up
+owned `__APP__:__APP__` mode `0640`, **not** `__APP__:www-data` mode
+`0660` as `conf/systemd-fcgiwrap.socket`'s `SocketUser=`/`SocketGroup=`/
+`SocketMode=` directives specified. `www-data` (nginx) had no permission
+bit granting it access at all — hence the 502, nginx's own connection
+attempt was rejected before it ever reached fcgiwrap.
+
+Root cause of *why* `SocketUser=`/`SocketGroup=` didn't take effect on
+this box is undetermined — could be a systemd version quirk, an
+interaction with the paired `.service`'s own `User=`/`Group=` overriding
+socket ownership in some circumstance, or something else. Not chasing it
+further with another guess-then-live-test round trip for what's ultimately
+a purely local IPC channel. Instead, stopped depending on that directive
+family being reliable at all:
+
+- `SocketMode=0666` (kept, harmless either way) — world-writable instead
+  of group-scoped. This socket is loopback-local FastCGI plumbing between
+  nginx and fcgiwrap only, never reachable over the network, so the
+  permissiveness cost is theoretical, not a real exposure.
+- Added `ExecStartPost=-/bin/chmod 666 __INSTALL_DIR__/fcgiwrap.sock` as a
+  belt-and-suspenders fallback — a real `chmod(1)` invocation via a
+  genuinely different systemd code path (`ExecStartPost=` on `.socket`
+  units runs after the listening socket is created — a real, documented
+  systemd.socket feature, double-checked given how wrong the
+  `SocketUser=`/`SocketGroup=` assumption turned out) than whatever
+  internal logic handled (or silently didn't handle) `SocketMode=`. Not
+  betting the whole fix on a sibling directive from the same family that
+  already failed once. Leading `-` so a transient failure here doesn't
+  block the socket itself from coming up.
+
+Not yet confirmed this specific fix works live — asked the user to
+upgrade and re-tested from here, same as items 13–18, rather than
+declaring it fixed on reasoning alone.

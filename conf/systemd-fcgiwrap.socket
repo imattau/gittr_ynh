@@ -3,15 +3,26 @@ Description=gittr — dedicated fcgiwrap socket for HTTPS git
 
 [Socket]
 ListenStream=__INSTALL_DIR__/fcgiwrap.sock
-# nginx (www-data) needs to connect to this socket as a client. Rather
-# than add www-data to __APP__'s group (or vice versa) system-wide,
-# systemd just chowns this one socket file group-www-data — the
-# fcgiwrap.service process itself never touches the path at all, it gets
-# the listening fd handed to it directly via socket activation. See
-# doc/DECISIONS.md item 17.
-SocketUser=__APP__
-SocketGroup=www-data
-SocketMode=0660
+# nginx (www-data) needs to connect to this socket as a client.
+# SocketUser=__APP__ / SocketGroup=www-data was the first attempt, on the
+# theory that systemd chowns the socket independent of which user the
+# paired .service runs as — confirmed live that it does NOT reliably do
+# that on the actual test box (the socket came up owned __APP__:__APP__,
+# mode 0640, not __APP__:www-data mode 0660 as configured — root cause
+# undetermined, not worth another guess-then-live-test round trip for a
+# purely local IPC socket). World-writable instead: this socket is
+# loopback-local FastCGI plumbing between nginx and fcgiwrap only, never
+# reachable over the network, so the permissiveness cost is theoretical.
+# See doc/DECISIONS.md item 19.
+SocketMode=0666
+# Belt-and-suspenders: SocketMode= is the same directive family as the
+# SocketUser=/SocketGroup= pair that silently didn't apply above, so
+# don't bet everything on it working either. ExecStartPost= runs a real
+# chmod(1) after the socket exists, a genuinely different code path from
+# whatever systemd-internal logic handled (or didn't handle) SocketMode=.
+# Leading '-' so a transient failure here doesn't block the socket
+# itself from coming up.
+ExecStartPost=-/bin/chmod 666 __INSTALL_DIR__/fcgiwrap.sock
 RemoveOnStop=true
 
 [Install]
