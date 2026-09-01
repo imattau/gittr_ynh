@@ -638,3 +638,70 @@ the network-host lookup entirely (no `AF_NETLINK` needed, sandbox stays as
 tight as before) and narrows the actual listen scope to match what nginx
 was already assuming, which is strictly better than just permitting the
 wider socket family.
+
+## 16. Config panel crashed entirely: `str` has no `.get()`
+
+App up, tile showing, then the user hit "Unexpected server error" just
+opening the config panel — before changing anything. Got the real
+traceback via `yunohost app config get gittr --full --debug`:
+
+```
+File ".../yunohost/utils/configpanel.py", line 157, in __init__
+    options = self.options_dict_to_list(kwargs, optional=optional)
+File ".../yunohost/utils/form.py", line 1953, in options_dict_to_list
+    "id": data.get("id", id_),
+AttributeError: 'str' object has no attribute 'get'
+```
+
+Traced it through `configpanel.py` (`ConfigPanel.get` →
+`_get_config_panel` → `ConfigPanelModel(**raw_config)`, where `raw_config`
+is `_get_raw_config()` — i.e. this app's `config_panel.toml`, read as-is,
+no bash-side `__VAR__` templating applied to it at all, confirmed by
+reading the loading code directly) down through `PanelModel.__init__`
+(sections = `[data | {"id": name} for name, data in kwargs.items()]`) into
+`SectionModel.__init__` → `OptionsModel.options_dict_to_list`, which
+iterates a section's leftover kwargs expecting every value to be a dict
+(an option's own sub-table) and calls `.get()` on it. Confirmed by
+hand-tracing that every value in `config_panel.toml`, parsed with Python's
+builtin `tomllib`, is correctly typed — no plain strings where dicts
+belong.
+
+The catch: **YunoHost's core doesn't use `tomllib`.**
+`src/utils/file_utils.py`'s `read_toml()` does `import toml; toml.loads(...)`
+— the older third-party `toml` PyPI package. Reparsing the exact same file
+with that library (installed and run directly, not assumed) reproduced the
+crash precisely: a dotted key whose value is a **multi-line triple-quoted
+string** —
+
+```toml
+help.en = """\
+some text \
+"""
+```
+
+— gets mis-parsed. Instead of nesting correctly, it produces an *empty*
+`help = {}` and leaks the actual text up as a **sibling key literally
+named `en`**, at whatever level the dotted key was written. For options
+(`[main.nostr.nostr_relays]`'s `help.en`) that's mostly harmless — an
+extra unexpected attribute on that option. For **sections**
+(`[main.github]`'s `help.en`, at section level) it's fatal: that stray
+`en: "<long string>"` becomes a phantom "option" entry when
+`options_dict_to_list` iterates the section's kwargs, and `data` for it is
+the plain string — exactly the crash. Single-line dotted keys
+(`ask.en = "one line"`, `name.en = "..."`) parse correctly with the same
+library — confirmed by testing that specific case directly too. It's
+specifically the multi-line + dotted-key combination this library gets
+wrong.
+
+Fixed by flattening every `help.en = """multi-line"""` block in
+`config_panel.toml` to a single line. Checked `manifest.toml` for the same
+pattern — it never used multi-line strings for `ask`/`help`, so it was
+never affected; confirmed by parsing it with the actual `toml` library
+too, not assumed clean by analogy.
+
+Given how much time hand-tracing pydantic internals cost before actually
+reproducing this with the real library, the lesson for next time: when a
+TOML file is involved and the failure is downstream of parsing it, install
+and run the *exact* parsing library in question against the *exact* file
+before doing anything else — `tomllib` (or any other spec-compliant
+parser) passing doesn't mean the actual consumer's parser agrees.

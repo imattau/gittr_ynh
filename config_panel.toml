@@ -5,6 +5,15 @@ version = "1.0"
 ## only — there was no way to change them after installation short of
 ## manually editing settings.yml and re-running ynh_add_config by hand. See
 ## doc/DECISIONS.md item 6.
+##
+## IMPORTANT: keep every `x.en = "..."` value on ONE line. YunoHost's core
+## parses this file with the old `toml` PyPI package (not Python's builtin
+## tomllib), which mis-parses a dotted key (`help.en = ...`) when the value
+## is a multi-line triple-quoted string — it silently produces an empty
+## `help = {}` and leaks the text up as a spurious sibling key literally
+## named `en`, which then crashes config-panel loading entirely ('str'
+## object has no attribute 'get', from a real reproduction, not a guess —
+## see doc/DECISIONS.md item 16). Single-line dotted keys parse fine.
 
 [main]
 name.en = "gittr configuration"
@@ -17,12 +26,7 @@ services = ["__APP__-bridge"]
         ask.en = "Nostr relays (comma-separated wss:// URLs)"
         type = "string"
         bind = "null"
-        help.en = """\
-        Changing this rebuilds the web UI and restarts the bridge — \
-        NEXT_PUBLIC_NOSTR_RELAYS is inlined into the client bundle at build \
-        time, not read at runtime (see doc/DECISIONS.md item 4), so this can \
-        take a minute or two.\
-        """
+        help.en = "Changing this rebuilds the web UI and restarts the bridge — NEXT_PUBLIC_NOSTR_RELAYS is inlined into the client bundle at build time, not read at runtime (see doc/DECISIONS.md item 4), so this can take a minute or two."
         pattern.regexp = '^wss://[^,]+(,wss://[^,]+)*$'
         pattern.error = "Must be one or more comma-separated wss:// URLs, no spaces"
 
@@ -31,20 +35,13 @@ services = ["__APP__-bridge"]
         type = "string"
         optional = true
         bind = "null"
-        help.en = """\
-        Leave blank to watch all authors (upstream's 'public GRASP' mode). \
-        Only restarts the bridge — no UI rebuild needed.\
-        """
+        help.en = "Leave blank to watch all authors (upstream's 'public GRASP' mode). Only restarts the bridge — no UI rebuild needed."
         pattern.regexp = '^([0-9a-fA-F]{64})?$'
         pattern.error = "Must be a 64-character hex pubkey, or left blank"
 
     [main.github]
     name.en = "GitHub integration (optional)"
-    help.en = """\
-    Requires a GitHub OAuth App you create yourself at \
-    https://github.com/settings/developers — callback URL \
-    https://__DOMAIN__/api/github/callback — see doc/ADMIN.md.\
-    """
+    help.en = "Requires a GitHub OAuth App you create yourself at https://github.com/settings/developers — callback URL https://__DOMAIN__/api/github/callback — see doc/ADMIN.md."
 
         [main.github.github_client_id]
         ask.en = "OAuth App client ID"
@@ -74,12 +71,7 @@ services = ["__APP__-bridge"]
         ask.en = "Blossom server URL (Pages / media uploads)"
         type = "url"
         bind = "null"
-        help.en = """\
-        Defaults to upstream's own public blossom.band — this package does \
-        not self-host Blossom. Changing this rebuilds the web UI \
-        (NEXT_PUBLIC_BLOSSOM_URL is build-time baked, like nostr_relays \
-        above), so it can take a minute or two.\
-        """
+        help.en = "Defaults to upstream's own public blossom.band — this package does not self-host Blossom. Changing this rebuilds the web UI (NEXT_PUBLIC_BLOSSOM_URL is build-time baked, like nostr_relays above), so it can take a minute or two."
 
     [main.moderation]
     name.en = "Moderation"
@@ -89,7 +81,4 @@ services = ["__APP__-bridge"]
         type = "string"
         optional = true
         bind = "null"
-        help.en = """\
-        Hides listed authors from explore/home/repos/sitemap. Changing this \
-        rebuilds the web UI, same as the two settings above.\
-        """
+        help.en = "Hides listed authors from explore/home/repos/sitemap. Changing this rebuilds the web UI, same as the two settings above."
