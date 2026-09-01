@@ -24,15 +24,15 @@ ynh_script_progression "Regenerating systemd configuration"
 # system_user, etc. — see doc/DECISIONS.md item 9), that path could still
 # differ from what a stale backed-up unit file has (e.g. restoring onto a
 # fresh server).
-ynh_add_systemd_config --service="$app-ui" --template="systemd-ui.service"
-ynh_add_systemd_config --service="$app-bridge" --template="systemd-bridge.service"
-ynh_add_systemd_config --service="$app-ssh" --template="systemd-ssh.service"
+ynh_config_add_systemd --service="$app-ui" --template="systemd-ui.service"
+ynh_config_add_systemd --service="$app-bridge" --template="systemd-bridge.service"
+ynh_config_add_systemd --service="$app-ssh" --template="systemd-ssh.service"
 
 ynh_script_progression "Starting services"
 yunohost service add "$app-bridge" --description="gitnostr bridge (repo/SSH-key sync from Nostr)" --log="/var/log/$app/bridge.log"
 yunohost service add "$app-ssh" --description="dedicated sshd for git-nostr-ssh"
-ynh_systemd_action --service_name="$app-bridge" --action="start" --log_path="systemd"
-ynh_systemd_action --service_name="$app-ui" --action="start" --log_path="systemd"
-ynh_systemd_action --service_name="$app-ssh" --action="start" --log_path="systemd"
+ynh_systemctl --service="$app-bridge" --action="start" --log_path="systemd"
+ynh_systemctl --service="$app-ui" --action="start" --log_path="systemd"
+ynh_systemctl --service="$app-ssh" --action="start" --log_path="systemd"
 
 ynh_script_progression "Restore complete"

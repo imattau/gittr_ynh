@@ -390,3 +390,67 @@ otherwise be orphaned after the app is removed.
 
 Not needed in `scripts/restore`: restore doesn't rebuild the bridge, it
 restores the already-built binary from the backup archive.
+
+## 11. The v1-vs-v2.1 rename goes much further than Go/Node
+
+Prompted by the user asking "was also getting warnings about
+`ynh_secure_remove`?" after the item 10 fix — checking that one
+(`ynh_secure_remove --file=X` → `ynh_safe_rm X`, positional, no
+backward-compat alias, same pattern as item 9) turned up the fact that
+item 9 was not an isolated incident: v2.1 renamed a **whole family** of
+config/service helpers under a `ynh_config_*` prefix, plus a couple of
+others. Rather than wait for each one to surface as its own runtime
+failure, audited every `ynh_*` call in every script against the actual
+downloaded `helpers.v2.1.d/*.sh` source (not GitHub code search, which
+returned false negatives more than once in this session — read the files
+directly). Full rename table:
+
+| v1 (what this package had) | v2.1 (correct) | Note |
+|---|---|---|
+| `ynh_add_config --template= --destination=` | `ynh_config_add` (same args) | |
+| `ynh_add_nginx_config` | `ynh_config_add_nginx` (no args) | |
+| `ynh_remove_nginx_config` | `ynh_config_remove_nginx` (no args) | |
+| `ynh_change_url_nginx_config` | `ynh_config_change_url_nginx` (no args) | |
+| `ynh_add_systemd_config --service= --template=` | `ynh_config_add_systemd` (same args) | |
+| `ynh_remove_systemd_config --service=X` | `ynh_config_remove_systemd X` | **positional now**, no `--service=` |
+| `ynh_systemd_action --service_name=X --action=Y --log_path=Z` | `ynh_systemctl --service=X --action=Y --log_path=Z` | arg renamed `service_name`→`service` |
+| `ynh_exec_warn_less CMD` | `ynh_exec_and_print_stderr_only_if_error CMD` | |
+| `ynh_secure_remove --file=X` | `ynh_safe_rm X` | **positional now**, no `--file=` |
+| `ynh_backup --src_path=X` | `ynh_backup X` | **positional now**, no `--src_path=` — see below |
+
+The `ynh_backup` one is the nastiest of the batch: unlike the others, it
+does **not** fail loudly. `ynh_backup()`'s v2.1 body is
+`local target="$1"` with no getopts parsing at all, so
+`ynh_backup --src_path="$install_dir"` would have set `target` to the
+literal string `--src_path=/var/www/gittr`, hit
+`[ ! -e "$target" ]`, printed `ynh_print_warn "File or folder
+'--src_path=/var/www/gittr' to be backed up does not exist"`, and
+`return 1` — no crash, no abort, just a backup archive **silently missing
+everything**. Would only have been discovered the day someone actually
+needed to restore from a backup. Confirmed by reading `ynh_backup`'s and
+`ynh_restore`'s bodies directly in `helpers.v2.1.d/backup.sh` rather than
+assuming symmetry between the two.
+
+`ynh_restore` itself turned out to already be correct — it was already
+positional (`ynh_restore "$install_dir"`) from when it was first written,
+so no change needed there. `ynh_app_setting_get`/`_set` (`--app=` `--key=`
+`--value=`) and `ynh_setup_source` (`--dest_dir=` `--source_id=`
+`--keep=`) were also double-checked against the v2.1 source directly and
+found to already be correct as originally written.
+
+Applied via `sed` across `scripts/install`, `upgrade`, `restore`,
+`remove`, `change_url`, `config`, `backup` for the mechanical renames, then
+hand-fixed the two argument-shape changes (`ynh_config_remove_systemd`,
+`ynh_systemctl`) and `ynh_backup` separately since a blind rename would
+have been wrong for those. Re-verified afterward by grepping every
+`ynh_*` call actually used across the whole package and confirming each
+one's function definition exists, by name, in the actual downloaded
+`helpers.v2.1.d/*.sh` files — not by re-reading my own conclusions.
+
+`package_linter` was re-run after this fix too, same as after items 9 and
+10: still clean, still only the three items in item 0. It has no way to
+catch any of this — it doesn't cross-reference helper calls against the
+declared `helpers_version` at all. Worth being explicit about since it
+means passing the linter here proves nothing about this whole class of
+bug; only reading the actual v2.1 source (as done now, comprehensively)
+or an actual install/backup/restore run against a real instance can.

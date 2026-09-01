@@ -45,42 +45,42 @@ publisher_blocklist=""
 ynh_script_progression "Writing UI build-time config"
 # NEXT_PUBLIC_* vars are inlined into the client bundle at build time, so
 # this must exist before `yarn build` runs — see conf/ui.env.j2.
-ynh_add_config --template="ui.env.j2" \
+ynh_config_add --template="ui.env.j2" \
 	--destination="$install_dir/ui/.env.production.local"
 
 ynh_script_progression "Writing UI runtime config (GitHub OAuth / Blossom / blocklist)"
-ynh_add_config --template="ui-runtime.env.j2" \
+ynh_config_add --template="ui-runtime.env.j2" \
 	--destination="$install_dir/ui/.env.runtime"
 
 ynh_script_progression "Building the UI"
 pushd "$install_dir/ui"
 	corepack enable
 	corepack prepare yarn@stable --activate
-	ynh_exec_warn_less yarn install --frozen-lockfile
-	ynh_exec_warn_less yarn build
+	ynh_exec_and_print_stderr_only_if_error yarn install --frozen-lockfile
+	ynh_exec_and_print_stderr_only_if_error yarn build
 popd
 
 ynh_script_progression "Writing bridge config"
 mkdir -p "$install_dir/$bridge_config_dir" "$install_dir/$repositories_dir" "$install_dir/data"
 nostr_relays_json_array=$(csv_to_json_array "$nostr_relays")
 git_repo_owners_json_array=$(csv_to_json_array "$repo_owner_pubkey")
-ynh_add_config --template="bridge-config.json.j2" \
+ynh_config_add --template="bridge-config.json.j2" \
 	--destination="$install_dir/$bridge_config_dir/$bridge_config_file"
 
 ynh_script_progression "Setting up dedicated SSH access for git-nostr-ssh"
 ssh_host_key_dir="$install_dir/ssh"
 mkdir -p "$ssh_host_key_dir"
 ssh-keygen -q -t ed25519 -N "" -f "$ssh_host_key_dir/ssh_host_ed25519_key"
-ynh_add_config --template="sshd_config.j2" \
+ynh_config_add --template="sshd_config.j2" \
 	--destination="$ssh_host_key_dir/sshd_config"
 
 ynh_script_progression "Configuring systemd services"
-ynh_add_systemd_config --service="$app-ui" --template="systemd-ui.service"
-ynh_add_systemd_config --service="$app-bridge" --template="systemd-bridge.service"
-ynh_add_systemd_config --service="$app-ssh" --template="systemd-ssh.service"
+ynh_config_add_systemd --service="$app-ui" --template="systemd-ui.service"
+ynh_config_add_systemd --service="$app-bridge" --template="systemd-bridge.service"
+ynh_config_add_systemd --service="$app-ssh" --template="systemd-ssh.service"
 
 ynh_script_progression "Configuring NGINX"
-ynh_add_nginx_config
+ynh_config_add_nginx
 
 ynh_script_progression "Setting permissions"
 # The bridge runs with HOME=$install_dir (see systemd-bridge.service) and
@@ -96,8 +96,8 @@ chmod 600 "$install_dir/ui/.env.runtime"
 ynh_script_progression "Enabling and starting services"
 yunohost service add "$app-bridge" --description="gitnostr bridge (repo/SSH-key sync from Nostr)" --log="/var/log/$app/bridge.log"
 yunohost service add "$app-ssh" --description="dedicated sshd for git-nostr-ssh"
-ynh_systemd_action --service_name="$app-bridge" --action="start" --log_path="systemd"
-ynh_systemd_action --service_name="$app-ui" --action="start" --log_path="systemd"
-ynh_systemd_action --service_name="$app-ssh" --action="start" --log_path="systemd"
+ynh_systemctl --service="$app-bridge" --action="start" --log_path="systemd"
+ynh_systemctl --service="$app-ui" --action="start" --log_path="systemd"
+ynh_systemctl --service="$app-ssh" --action="start" --log_path="systemd"
 
 ynh_script_progression "Installation complete"

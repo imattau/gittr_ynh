@@ -4,17 +4,20 @@ source _common.sh
 source /usr/share/yunohost/helpers
 
 ynh_script_progression "Stopping and removing services"
-ynh_remove_systemd_config --service="$app-ui"
-ynh_remove_systemd_config --service="$app-ssh"
-ynh_remove_systemd_config --service="$app-bridge"
+ynh_config_remove_systemd "$app-ui"
+ynh_config_remove_systemd "$app-ssh"
+ynh_config_remove_systemd "$app-bridge"
 yunohost service remove "$app-bridge" 2>/dev/null || true
 yunohost service remove "$app-ssh" 2>/dev/null || true
 
 ynh_script_progression "Removing NGINX configuration"
-ynh_remove_nginx_config
+ynh_config_remove_nginx
 
 ynh_script_progression "Removing app main directory"
-ynh_secure_remove --file="$install_dir"
+# ynh_secure_remove --file=X is the removed v1 API too (see
+# doc/DECISIONS.md items 9/10) — v2.1 renamed it to ynh_safe_rm with a
+# positional argument, no --file=.
+ynh_safe_rm "$install_dir"
 
 # No explicit Go/Node.js/apt removal here — resources.go, resources.nodejs,
 # and resources.apt are deprovisioned automatically as part of the standard
@@ -22,6 +25,6 @@ ynh_secure_remove --file="$install_dir"
 
 # The go build module cache (see doc/DECISIONS.md item 10) isn't tracked by
 # any resource and won't be cleaned up automatically.
-ynh_secure_remove --file="/var/cache/yunohost/gittr-go-build"
+ynh_safe_rm "/var/cache/yunohost/gittr-go-build"
 
 ynh_script_progression "Removal complete"

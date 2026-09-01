@@ -4,9 +4,9 @@ source _common.sh
 source /usr/share/yunohost/helpers
 
 ynh_script_progression "Stopping services"
-ynh_systemd_action --service_name="$app-ui" --action="stop" --log_path="systemd"
-ynh_systemd_action --service_name="$app-ssh" --action="stop" --log_path="systemd"
-ynh_systemd_action --service_name="$app-bridge" --action="stop" --log_path="systemd"
+ynh_systemctl --service="$app-ui" --action="stop" --log_path="systemd"
+ynh_systemctl --service="$app-ssh" --action="stop" --log_path="systemd"
+ynh_systemctl --service="$app-bridge" --action="stop" --log_path="systemd"
 
 ynh_script_progression "Updating source files"
 # Keep the bridge/UI config, data (repositories, sqlite db), and the
@@ -36,34 +36,34 @@ ynh_app_setting_set --app=$app --key=blossom_url --value="$blossom_url"
 
 ynh_script_progression "Rebuilding the UI"
 # Node.js is likewise a manifest resource, already on $PATH.
-ynh_add_config --template="ui.env.j2" \
+ynh_config_add --template="ui.env.j2" \
 	--destination="$install_dir/ui/.env.production.local"
-ynh_add_config --template="ui-runtime.env.j2" \
+ynh_config_add --template="ui-runtime.env.j2" \
 	--destination="$install_dir/ui/.env.runtime"
 pushd "$install_dir/ui"
 	corepack enable
 	corepack prepare yarn@stable --activate
-	ynh_exec_warn_less yarn install --frozen-lockfile
-	ynh_exec_warn_less yarn build
+	ynh_exec_and_print_stderr_only_if_error yarn install --frozen-lockfile
+	ynh_exec_and_print_stderr_only_if_error yarn build
 popd
 
 ynh_script_progression "Updating bridge config"
 nostr_relays_json_array=$(csv_to_json_array "$nostr_relays")
 git_repo_owners_json_array=$(csv_to_json_array "$repo_owner_pubkey")
-ynh_add_config --template="bridge-config.json.j2" \
+ynh_config_add --template="bridge-config.json.j2" \
 	--destination="$install_dir/$bridge_config_dir/$bridge_config_file"
 
 ynh_script_progression "Updating sshd configuration"
-ynh_add_config --template="sshd_config.j2" \
+ynh_config_add --template="sshd_config.j2" \
 	--destination="$install_dir/ssh/sshd_config"
 
 ynh_script_progression "Updating systemd configuration"
-ynh_add_systemd_config --service="$app-ui" --template="systemd-ui.service"
-ynh_add_systemd_config --service="$app-bridge" --template="systemd-bridge.service"
-ynh_add_systemd_config --service="$app-ssh" --template="systemd-ssh.service"
+ynh_config_add_systemd --service="$app-ui" --template="systemd-ui.service"
+ynh_config_add_systemd --service="$app-bridge" --template="systemd-bridge.service"
+ynh_config_add_systemd --service="$app-ssh" --template="systemd-ssh.service"
 
 ynh_script_progression "Updating NGINX configuration"
-ynh_add_nginx_config
+ynh_config_add_nginx
 
 ynh_script_progression "Setting permissions"
 chown -R "$app:$app" "$install_dir"
@@ -75,8 +75,8 @@ chmod 600 "$install_dir/ui/.env.runtime"
 ynh_script_progression "Starting services"
 yunohost service add "$app-bridge" --description="gitnostr bridge (repo/SSH-key sync from Nostr)" --log="/var/log/$app/bridge.log"
 yunohost service add "$app-ssh" --description="dedicated sshd for git-nostr-ssh"
-ynh_systemd_action --service_name="$app-bridge" --action="start" --log_path="systemd"
-ynh_systemd_action --service_name="$app-ui" --action="start" --log_path="systemd"
-ynh_systemd_action --service_name="$app-ssh" --action="start" --log_path="systemd"
+ynh_systemctl --service="$app-bridge" --action="start" --log_path="systemd"
+ynh_systemctl --service="$app-ui" --action="start" --log_path="systemd"
+ynh_systemctl --service="$app-ssh" --action="start" --log_path="systemd"
 
 ynh_script_progression "Upgrade complete"

@@ -7,7 +7,7 @@ source /usr/share/yunohost/helpers
 
 ynh_print_info "Declaring files to be backed up..."
 
-ynh_backup --src_path="$install_dir"
+ynh_backup "$install_dir"
 
 # This includes repositories/ (bare repos) and data/git-nostr-db.sqlite,
 # which for busy instances could get large fast — there's no exclusion here
@@ -15,7 +15,7 @@ ynh_backup --src_path="$install_dir"
 # separate git-based mirroring strategy for repo content instead
 # (see doc/DECISIONS.md item 5).
 
-ynh_backup --src_path="/etc/nginx/conf.d/$domain.d/$app.conf"
+ynh_backup "/etc/nginx/conf.d/$domain.d/$app.conf"
 
 # systemd units are NOT backed up here on purpose: scripts/restore
 # regenerates them from templates instead of restoring a byte-for-byte copy,

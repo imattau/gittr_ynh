@@ -4,10 +4,10 @@ source _common.sh
 source /usr/share/yunohost/helpers
 
 ynh_script_progression "Stopping services"
-ynh_systemd_action --service_name="$app-ui" --action="stop" --log_path="systemd"
+ynh_systemctl --service="$app-ui" --action="stop" --log_path="systemd"
 
 ynh_script_progression "Updating NGINX configuration"
-ynh_change_url_nginx_config
+ynh_config_change_url_nginx
 
 ynh_script_progression "Rebuilding the UI for the new domain"
 # NEXT_PUBLIC_DOMAIN / SITE_URL / GIT_SSH_BASE / GIT_SERVER_URL are inlined
@@ -15,23 +15,23 @@ ynh_script_progression "Rebuilding the UI for the new domain"
 # systemd restart is not enough after a domain change, the UI must rebuild.
 # Node.js is a manifest resource, already on $PATH from sourcing the
 # helpers above (see doc/DECISIONS.md item 9).
-ynh_add_config --template="ui.env.j2" \
+ynh_config_add --template="ui.env.j2" \
 	--destination="$install_dir/ui/.env.production.local"
 # GITHUB_REDIRECT_URI is domain-dependent too (server-only, so no rebuild
 # needed for it specifically — but regenerate it here anyway for
 # consistency, and because the GitHub OAuth App's callback URL registered
 # with GitHub itself will need updating by hand to match the new domain).
-ynh_add_config --template="ui-runtime.env.j2" \
+ynh_config_add --template="ui-runtime.env.j2" \
 	--destination="$install_dir/ui/.env.runtime"
 chmod 600 "$install_dir/ui/.env.runtime"
 pushd "$install_dir/ui"
-	ynh_exec_warn_less yarn build
+	ynh_exec_and_print_stderr_only_if_error yarn build
 popd
 
 ynh_script_progression "Updating systemd configuration"
-ynh_add_systemd_config --service="$app-ui" --template="systemd-ui.service"
+ynh_config_add_systemd --service="$app-ui" --template="systemd-ui.service"
 
 ynh_script_progression "Starting services"
-ynh_systemd_action --service_name="$app-ui" --action="start" --log_path="systemd"
+ynh_systemctl --service="$app-ui" --action="start" --log_path="systemd"
 
 ynh_script_progression "Change of URL completed"

@@ -19,7 +19,7 @@ ynh_abort_if_errors
 rewrite_bridge_config() {
 	nostr_relays_json_array=$(csv_to_json_array "$nostr_relays")
 	git_repo_owners_json_array=$(csv_to_json_array "$repo_owner_pubkey")
-	ynh_add_config --template="bridge-config.json.j2" \
+	ynh_config_add --template="bridge-config.json.j2" \
 		--destination="$install_dir/$bridge_config_dir/$bridge_config_file"
 }
 
@@ -27,16 +27,16 @@ rebuild_ui() {
 	ynh_script_progression "Rebuilding the UI (this can take a minute or two)"
 	# Node.js is a manifest resource, already on $PATH — see doc/DECISIONS.md
 	# item 9.
-	ynh_add_config --template="ui.env.j2" \
+	ynh_config_add --template="ui.env.j2" \
 		--destination="$install_dir/ui/.env.production.local"
 	pushd "$install_dir/ui"
-		ynh_exec_warn_less yarn build
+		ynh_exec_and_print_stderr_only_if_error yarn build
 	popd
-	ynh_systemd_action --service_name="$app-ui" --action="restart" --log_path="systemd"
+	ynh_systemctl --service="$app-ui" --action="restart" --log_path="systemd"
 }
 
 write_ui_runtime_config() {
-	ynh_add_config --template="ui-runtime.env.j2" \
+	ynh_config_add --template="ui-runtime.env.j2" \
 		--destination="$install_dir/ui/.env.runtime"
 	chmod 600 "$install_dir/ui/.env.runtime"
 }
@@ -96,21 +96,21 @@ set__github_client_id() {
 	ynh_app_setting_set --app=$app --key=github_client_id --value="$github_client_id"
 	ynh_script_progression "Updating GitHub OAuth config"
 	write_ui_runtime_config
-	ynh_systemd_action --service_name="$app-ui" --action="restart" --log_path="systemd"
+	ynh_systemctl --service="$app-ui" --action="restart" --log_path="systemd"
 }
 
 set__github_client_secret() {
 	ynh_app_setting_set --app=$app --key=github_client_secret --value="$github_client_secret"
 	ynh_script_progression "Updating GitHub OAuth config"
 	write_ui_runtime_config
-	ynh_systemd_action --service_name="$app-ui" --action="restart" --log_path="systemd"
+	ynh_systemctl --service="$app-ui" --action="restart" --log_path="systemd"
 }
 
 set__github_platform_token() {
 	ynh_app_setting_set --app=$app --key=github_platform_token --value="$github_platform_token"
 	ynh_script_progression "Updating GitHub platform token"
 	write_ui_runtime_config
-	ynh_systemd_action --service_name="$app-ui" --action="restart" --log_path="systemd"
+	ynh_systemctl --service="$app-ui" --action="restart" --log_path="systemd"
 }
 
 set__blossom_url() {
