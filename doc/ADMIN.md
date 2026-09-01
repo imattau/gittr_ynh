@@ -71,6 +71,23 @@ any Nostr client. The bridge picks them up from the relays and rewrites
   `ui/.env.production.local` alone will not take effect until `yarn build`
   reruns.
 
+## Upgrading from a pre-v0.1.5 install
+
+If gittr was installed before v0.1.5, it predates this package declaring
+`[resources.permissions]` / `[install.init_main_permission]` — its `main`
+permission was created with nobody allowed and no tile. Upgrading fixes
+the tile automatically, but **not** who's allowed to access it (that group
+is only set once, when the permission is first created — an upgrade
+deliberately doesn't touch it afterward). Run this once by hand:
+
+```
+yunohost user permission update gittr.main --add visitors
+```
+
+(or `--add all_users` instead, to gate it to logged-in YunoHost users). A
+fresh install doesn't need this — `init_main_permission` handles it
+automatically at install time.
+
 ## Changing config after install
 
 All of the below can be changed via `yunohost app config get/set gittr` or

@@ -592,3 +592,49 @@ once provisioned. Worth treating any manifest resource's documented
 defaults with the same "did I check what happens when I omit this
 entirely" skepticism as a helper call, not just the ones that fail loudly
 at install time.
+
+One operational note from diagnosing this live: `init_main_permission` is
+consulted **only** at the moment a permission is first created
+(`PermissionsResource.provision_or_update`, `if perm not in existing_perms:`
+gates the `allowed=` assignment). An `allowed` group, once set, is
+deliberately left alone on every later `provision_or_update` — an upgrade
+does not retroactively grant `visitors` to a permission that was created
+under an older manifest without it. `show_tile` *does* get recalculated
+unconditionally on every provision (it's outside that `if` block), so an
+upgrade should fix a missing tile even on an old install, but not a wrong
+`allowed` group — that needs `yunohost user permission update gittr.main
+--add visitors` by hand, or a fresh install, once.
+
+## 15. `gittr-ui` crash-looping: `AF_NETLINK` needed for `os.networkInterfaces()`
+
+Found by the user directly asking "should gittr-ui even be running?" —
+it wasn't, while bridge and ssh were both up. `journalctl -u gittr-ui`:
+
+```
+NodeError [SystemError]: A system error occurred: uv_interface_addresses
+returned Unknown system error 97 (Unknown system error 97)
+    at Object.networkInterfaces (node:os:223:16)
+    at getNetworkHosts (.../next/dist/lib/get-network-host.js:18:36)
+```
+
+errno 97 is `EAFNOSUPPORT`. Next.js's `next start` calls
+`os.networkInterfaces()` at boot to print the "available on your network"
+banner — on Linux that's `getifaddrs()`, which needs an `AF_NETLINK`
+socket. `conf/systemd-ui.service`'s `RestrictAddressFamilies=AF_UNIX
+AF_INET AF_INET6` doesn't include it, so the kernel refuses the socket and
+Next.js dies on every single start — the same category of self-inflicted
+hardening bug as item 13's SSH SIGSYS, just a blocked address family
+instead of a blocked syscall.
+
+Rather than widen the sandbox (add `AF_NETLINK`), found a tighter fix by
+reading Next.js's own source
+(`packages/next/src/server/lib/start-server.ts`): the network-host lookup
+is `hostname ?? getNetworkHost(...)` — it only runs when `next start` is
+given **no** explicit `-H`/`--hostname`. `conf/nginx.conf` already proxies
+to `127.0.0.1:$port` specifically (not `0.0.0.0`/`localhost`), so the UI
+never needed to listen on all interfaces in the first place. Added
+`-H 127.0.0.1` to `ExecStart` in `conf/systemd-ui.service` — this skips
+the network-host lookup entirely (no `AF_NETLINK` needed, sandbox stays as
+tight as before) and narrows the actual listen scope to match what nginx
+was already assuming, which is strictly better than just permitting the
+wider socket family.
