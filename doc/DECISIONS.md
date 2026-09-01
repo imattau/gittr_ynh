@@ -152,3 +152,63 @@ Still true from the original sketch: for busy instances, `repositories/`
 and the sqlite db could get large. No exclusion is implemented — if this
 becomes a real problem, exclude `repositories/` from the main backup and
 document a separate git-mirroring strategy instead.
+
+## 6. Ongoing (post-install) configuration
+
+Until this item, `nostr_relays` and `repo_owner_pubkey` were install-time
+questions only — there was no supported way to change either afterward
+short of hand-editing `settings.yml` and re-running `ynh_add_config`
+manually. Added `config_panel.toml` + `scripts/config` so both are editable
+from `yunohost app config` / the webadmin Config Panel, matching the
+question IDs already established at install time (required so the config
+panel mechanism and `ynh_add_config` don't drift out of sync — see the
+comments in `config_panel.toml.example` upstream).
+
+Both use `bind = "null"` with custom `get__`/`set__` functions rather than
+the default file-binding, because:
+
+- `repo_owner_pubkey` needs to become part of a JSON array
+  (`gitRepoOwners`), not a raw key=value line — same `csv_to_json_array`
+  logic as install/upgrade.
+- `nostr_relays` additionally needs a **full UI rebuild**, not just a config
+  file edit — see item 4. `set__nostr_relays` in `scripts/config` runs
+  `yarn build` before restarting the UI service, so this one config-panel
+  save can take a minute or two; documented in the panel's `help` text so
+  it doesn't look hung.
+
+Confirmed via YunoHost core (`helpers/helpers.v2.1.d/config`,
+`_ynh_app_config_validate`) that `$nostr_relays` / `$repo_owner_pubkey` are
+ambient bash variables inside both setters regardless of which one actually
+changed (the framework pre-populates unchanged questions with their current
+value) — so both setters can reference both variables directly without an
+extra `ynh_app_setting_get` round-trip.
+
+**Still not exposed anywhere (install or config panel), left as manual
+`.env.production.local` / `git-nostr-bridge.json` edits + rebuild for an
+admin who wants them**: GitHub OAuth (import/rate-limit token), Blossom
+URLs (Pages/media storage — defaults to upstream's public `blossom.band`
+if a self-hoster ever touches Pages), Lightning bounties / `push_cost_sats`
+paywall (LNbits/NWC/LNURL keys, a whole payment-integration surface), the
+leaderboard/SEO-snapshot systemd timers (`infra/systemd/*.timer` upstream —
+without them, "Most Active"/sitemap features do a live relay scan per
+request instead of reading a warm cache), the CVE-alert bot, Telegram
+notifications, the publisher blocklist, and the WOT oracle URL override.
+None of these are required for the app to work; wiring all of them into the
+config panel would be a lot of surface for a v0.1 package per
+`doc/DECISIONS.md`'s own "keep things simple" framing from
+`config_panel.toml.example`.
+
+## 7. Sitemap default for a single-tenant instance
+
+`conf/systemd-ui.service` sets `SITEMAP_SKIP_NOSTR=1`. This is a
+server-only var (read at request time, not baked into the client bundle
+like `NEXT_PUBLIC_*`), so it's safe to change without a rebuild — unlike
+items 4/6 above. Set by default because this package doesn't install
+upstream's optional SEO-snapshot timer (see item 6); without either the
+timer's warm cache or this flag, every visitor's `/sitemap.xml` request
+would trigger a live, uncached multi-relay scan. For a single-owner
+self-hosted instance, a leaner static sitemap is the better trade-off than
+a slow one. An admin who wants full SEO coverage can unset this and
+manually install upstream's `scripts/install-gittr-seo-repo-index-timer.sh`
+— out of scope for this package (it assumes an `/opt/ngit`-shaped
+deployment, not `$install_dir`).

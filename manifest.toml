@@ -40,12 +40,20 @@ ram.runtime = "512M"
     ask.en = "Which Nostr relays should the bridge and UI use?"
     default = "wss://relay.damus.io,wss://nos.lol"
     help.en = "Comma-separated relay list the bridge and UI will use."
+    pattern.regexp = '^wss://[^,]+(,wss://[^,]+)*$'
+    pattern.error = "Must be one or more comma-separated wss:// URLs, no spaces"
 
     [install.repo_owner_pubkey]
     type = "string"
     optional = true
     ask.en = "Hex pubkey allowed to own/create repos on this bridge (optional)"
     help.en = "Leave blank to watch all authors (upstream's default 'public GRASP' mode) — see doc/DECISIONS.md item 2."
+    pattern.regexp = '^([0-9a-fA-F]{64})?$'
+    pattern.error = "Must be a 64-character hex pubkey, or left blank"
+
+    # nostr_relays and repo_owner_pubkey can both be changed after install
+    # via the config panel (config_panel.toml + scripts/config) — see
+    # doc/DECISIONS.md item 6.
 
 [resources]
     [resources.system_user]

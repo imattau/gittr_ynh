@@ -67,6 +67,36 @@ any Nostr client. The bridge picks them up from the relays and rewrites
   `ui/.env.production.local` alone will not take effect until `yarn build`
   reruns.
 
+## Changing config after install
+
+`nostr_relays` and `repo_owner_pubkey` can be changed after install via:
+
+```
+yunohost app config get gittr
+yunohost app config set gittr nostr_relays -v "wss://relay1,wss://relay2"
+yunohost app config set gittr repo_owner_pubkey -v "<64-char hex pubkey>"
+```
+
+— or the webadmin's Apps → gittr → Config Panel. **Changing `nostr_relays`
+rebuilds the UI** (same reason as changing the domain, above) and can take
+a minute or two; changing `repo_owner_pubkey` only restarts the bridge and
+is fast. See doc/DECISIONS.md item 6.
+
+**Not exposed anywhere (install question or config panel) — manual
+`ui/.env.production.local` / `.config/git-nostr/git-nostr-bridge.json`
+edits + a rebuild only**: GitHub OAuth, Blossom storage URLs (Pages/media —
+falls back to upstream's public `blossom.band` if you touch Pages without
+setting this), Lightning bounties / the `push_cost_sats` push paywall
+(LNbits/NWC/LNURL), the leaderboard/SEO-snapshot systemd timers, the
+CVE-alert bot, Telegram notifications, the publisher blocklist, and the WoT
+oracle URL. None of these are required for the app to function. Full list
+and reasoning in doc/DECISIONS.md item 6.
+
+By default `/sitemap.xml` skips live Nostr relay scans
+(`SITEMAP_SKIP_NOSTR=1` in `conf/systemd-ui.service`) since this package
+doesn't install the SEO-snapshot timer that would otherwise back it —
+see doc/DECISIONS.md item 7 if you want full SEO coverage instead.
+
 ## Data
 
 - Bare repositories live under `repositories/` inside the app's install

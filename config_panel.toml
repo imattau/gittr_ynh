@@ -1,0 +1,39 @@
+#:schema https://github.com/YunoHost/apps/raw/main/schemas/config_panel.v1.schema.json
+version = "1.0"
+
+## Before this existed, nostr_relays and repo_owner_pubkey were install-time
+## only — there was no way to change them after installation short of
+## manually editing settings.yml and re-running ynh_add_config by hand. See
+## doc/DECISIONS.md item 6.
+
+[main]
+name.en = "gittr configuration"
+services = ["__APP__-bridge"]
+
+    [main.nostr]
+    name.en = "Nostr"
+
+        [main.nostr.nostr_relays]
+        ask.en = "Nostr relays (comma-separated wss:// URLs)"
+        type = "string"
+        bind = "null"
+        help.en = """\
+        Changing this rebuilds the web UI and restarts the bridge — \
+        NEXT_PUBLIC_NOSTR_RELAYS is inlined into the client bundle at build \
+        time, not read at runtime (see doc/DECISIONS.md item 4), so this can \
+        take a minute or two.\
+        """
+        pattern.regexp = '^wss://[^,]+(,wss://[^,]+)*$'
+        pattern.error = "Must be one or more comma-separated wss:// URLs, no spaces"
+
+        [main.nostr.repo_owner_pubkey]
+        ask.en = "Repo owner pubkey (hex, optional)"
+        type = "string"
+        optional = true
+        bind = "null"
+        help.en = """\
+        Leave blank to watch all authors (upstream's 'public GRASP' mode). \
+        Only restarts the bridge — no UI rebuild needed.\
+        """
+        pattern.regexp = '^([0-9a-fA-F]{64})?$'
+        pattern.error = "Must be a 64-character hex pubkey, or left blank"

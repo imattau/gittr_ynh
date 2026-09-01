@@ -20,6 +20,11 @@ RestartSec=5
 # explicitly rather than rely on that fallback. See doc/DECISIONS.md item 3.
 Environment=GIT_NOSTR_BRIDGE_DB=__INSTALL_DIR__/data/git-nostr-db.sqlite
 Environment=GIT_NOSTR_BRIDGE_REPOS_DIR=__INSTALL_DIR__/repositories
+# Server-only (read at request time, unlike NEXT_PUBLIC_* above — safe to
+# change here without a rebuild). This package doesn't install upstream's
+# optional SEO-snapshot timer, so without this, every /sitemap.xml request
+# does a live, uncached Nostr relay scan. See doc/DECISIONS.md item 7.
+Environment=SITEMAP_SKIP_NOSTR=1
 
 # Sandboxing options to harden security.
 # Details: https://www.freedesktop.org/software/systemd/man/systemd.exec.html

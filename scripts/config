@@ -1,0 +1,60 @@
+#!/bin/bash
+
+source _common.sh
+source /usr/share/yunohost/helpers
+
+ynh_abort_if_errors
+
+#=================================================
+# GETTERS
+#=================================================
+
+get__nostr_relays() {
+	ynh_app_setting_get --app=$app --key=nostr_relays
+}
+
+get__repo_owner_pubkey() {
+	ynh_app_setting_get --app=$app --key=repo_owner_pubkey
+}
+
+#=================================================
+# SETTERS
+#=================================================
+# $nostr_relays and $repo_owner_pubkey are ambient here: the config-panel
+# helper pre-populates both with either the newly submitted value or the
+# current setting, regardless of which one actually changed — see
+# ynh_app_config_run's _ynh_app_config_validate in YunoHost core.
+
+set__nostr_relays() {
+	ynh_app_setting_set --app=$app --key=nostr_relays --value="$nostr_relays"
+
+	ynh_script_progression "Updating bridge config for the new relay list"
+	nostr_relays_json_array=$(csv_to_json_array "$nostr_relays")
+	git_repo_owners_json_array=$(csv_to_json_array "$repo_owner_pubkey")
+	ynh_add_config --template="bridge-config.json.j2" \
+		--destination="$install_dir/$bridge_config_dir/$bridge_config_file"
+
+	ynh_script_progression "Rebuilding the UI (this can take a minute or two)"
+	ynh_use_nodejs
+	ynh_add_config --template="ui.env.j2" \
+		--destination="$install_dir/ui/.env.production.local"
+	pushd "$install_dir/ui"
+		ynh_exec_warn_less yarn build
+	popd
+
+	ynh_systemd_action --service_name="$app-ui" --action="restart" --log_path="systemd"
+}
+
+set__repo_owner_pubkey() {
+	ynh_app_setting_set --app=$app --key=repo_owner_pubkey --value="$repo_owner_pubkey"
+
+	ynh_script_progression "Updating bridge config for the new repo owner"
+	nostr_relays_json_array=$(csv_to_json_array "$nostr_relays")
+	git_repo_owners_json_array=$(csv_to_json_array "$repo_owner_pubkey")
+	ynh_add_config --template="bridge-config.json.j2" \
+		--destination="$install_dir/$bridge_config_dir/$bridge_config_file"
+	# config_panel.toml's `services = ["__APP__-bridge"]` restarts the
+	# bridge automatically after this setter runs — no explicit restart here.
+}
+
+ynh_app_config_run "$1"
