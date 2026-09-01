@@ -813,3 +813,66 @@ here without a live box to verify against risks the same failure a third
 time for no verified benefit.
 
 Not yet confirmed on a live instance — next thing to watch for.
+
+## 18. HTTPS git: the ACL endpoint doesn't exist at the pinned tag
+
+Tested live immediately after v0.1.9 shipped:
+`curl https://.../<pubkey>/repo.git/info/refs?service=git-upload-pack`
+returned a bare **500 Internal Server Error** for every repo, including
+ones that should have been a clean "repo not found". Traced it by testing
+each hop directly with `curl` rather than guessing from the symptom:
+
+- `https://domain/api/nostr/info` (NIP-11) — worked, confirming the UI
+  itself was fine and the domain/routing was correct.
+- `https://domain/api/git/http-auth` directly — returned a **plain
+  Next.js 404 page**. That route doesn't exist in this build at all.
+- nginx's `auth_request` directive only special-cases 2xx (allow) and
+  401/403 (denied, routed to the configured `error_page`) responses from
+  the auth subrequest — *any other* status, 404 included, is treated as
+  an **error in the auth server itself**, and nginx returns 500 to the
+  original client. That's the exact mechanism, not a guess: confirmed
+  the 404 first, then confirmed nginx's documented `auth_request`
+  behavior explains the 500 that wraps it.
+
+Checked the actual pinned tag's source tree for the file
+(`gh api repos/.../git/trees/v0.2.6?recursive=true`) — genuinely absent.
+It exists on upstream's `main` branch
+(`ui/src/pages/api/git/http-auth.ts`, added after v0.2.6 was tagged) but
+no tag past `v0.2.6` exists yet to pick it up cleanly. Traced the
+dependency chain to see whether a small patch could backport just this
+one file: `http-auth.ts` imports `assertRepoReadAccess`/
+`assertRepoWriteAccess`/`parseGitHttpUri` from `repo-read-access.ts`,
+which itself imports `resolveBridgeDbPath` from a file that doesn't exist
+in v0.2.6 either, plus a `verifyNostrAuth` from `push-auth.ts` — also
+absent, and confirmed (not assumed) that the *older* v0.2.6 code doesn't
+have an equivalent under a different name (checked `push.ts`, which
+handles auth inline rather than via any shared `verifyNostrAuth` export).
+This is a genuinely new, multi-file subsystem, not a one-file gap — too
+much unverified surface to responsibly graft into a pinned build via a
+source patch.
+
+Presented the real tradeoff rather than picking silently: bump the pin
+past `v0.2.6` to whatever commit ships this (loses the "pinned to a
+tagged release" property and means re-verifying the whole build/install
+pipeline against unrelated changes since v0.2.6, none of it audited),
+leave HTTPS git disabled again, or ship HTTPS git now without the
+ACL gate and document the gap clearly. Chose the third: removed the
+`auth_request`/`@git_auth_denied` machinery from `conf/nginx.conf`
+entirely (calling a nonexistent endpoint was strictly worse than not
+calling it — the *current* state was a hard 500 for every repo, not a
+security posture worth preserving over a working one). Every repo is now
+readable and writable over HTTPS regardless of Nostr-level public/private
+status, until this package's pin moves to a tag that ships the endpoint.
+**SSH is completely unaffected** — `git-nostr-ssh` enforces
+owner/`RepositoryPermission` independently and always has; this gap is
+HTTPS-transport-specific. Documented prominently in `doc/ADMIN.md` with a
+recommendation that private-repo owners use SSH until this is resolved,
+not buried in this file alone.
+
+Lesson for item 17 specifically: "already implemented upstream, nothing
+to build" was stated with confidence there based on upstream's *docs*
+describing the feature, without separately confirming that specific file
+exists *at the pinned tag* — the same category of gap as trusting a
+helper name without checking which API generation is actually sourced
+(items 9–11). Docs describe the project's current `main`, not
+necessarily whatever tag a downstream packager happens to have pinned.

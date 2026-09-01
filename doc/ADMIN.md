@@ -177,15 +177,23 @@ Same URL format as SSH, just `https://` instead of `ssh://`. Served by
 `git-http-backend` behind a dedicated `fcgiwrap` instance (its own
 socket-activated systemd unit — `gittr-fcgiwrap.socket` /
 `gittr-fcgiwrap.service` — not the shared system `fcgiwrap`, so this
-doesn't touch any other app's setup). Private repos are gated by an nginx
-`auth_request` to the UI's own `/api/git/http-auth` endpoint, mirroring
-the same owner/permission ACL SSH already enforces — authorized users pass
-a signed Nostr event the same way as any bridge API push
-(`git -c http.extraHeader="X-Nostr-Auth-Event: ..."`).
+doesn't touch any other app's setup).
+
+**⚠️ No private-repo enforcement over HTTPS.** Every repo is readable and
+writable over HTTPS regardless of its Nostr-level public/private setting
+— confirmed live, not a theoretical gap. The ACL endpoint this would need
+(`/api/git/http-auth`) doesn't exist in the pinned `v0.2.6` tag; it was
+added to upstream after that tag, with no newer tag yet. **SSH is
+unaffected** — `git-nostr-ssh` has its own independent, working
+owner/permission enforcement, untouched by any of this. If you have
+private repos, tell their owners to use SSH until this package's pin is
+bumped to a tag that ships the HTTPS ACL endpoint. See doc/DECISIONS.md
+item 18.
 
 Originally descoped for v0.1 (see doc/DECISIONS.md item 3) as more surface
 than seemed worth it before SSH-only had even been proven working — added
 once that held up and it became clear it's what gittr's own UI actually
-tells users to run. Full design notes in doc/DECISIONS.md item 17,
-including what was deliberately left out (CORS support for in-browser git
-clients like gitworkshop.dev, and non-root-path installs).
+tells users to run. Full design notes in doc/DECISIONS.md item 17
+(the ACL gap: item 18), including what was deliberately left out (CORS
+support for in-browser git clients like gitworkshop.dev, and non-root-path
+installs).

@@ -39,8 +39,10 @@ implementation:
   package runs a second, dedicated `sshd` instance for that, rather than
   touching the server's admin SSH config. HTTPS smart-git uses
   `git-http-backend` behind a dedicated `fcgiwrap` instance (its own
-  socket-activated systemd unit, not the shared system one), with nginx
-  `auth_request` gating private repos via the UI's own ACL endpoint.
+  socket-activated systemd unit, not the shared system one).
+  **⚠️ HTTPS git currently has no private-repo enforcement** — the
+  upstream ACL endpoint it needs doesn't exist yet at the pinned tag; SSH
+  is unaffected. See `doc/DECISIONS.md` item 18.
 - **Go and Node.js are declared as manifest resources** (`resources.go`,
   `resources.nodejs`) and provisioned by YunoHost's own resource system,
   not hand-vendored or scripted via helper calls.
