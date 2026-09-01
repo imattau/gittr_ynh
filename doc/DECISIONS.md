@@ -50,19 +50,28 @@ means editing that url/sha256 pair and re-testing the build, not editing
 
 ## 2. Optional features default off
 
-- **Bounties (LNbits/NWC/LNURL) and the `push_cost_sats` paywall**: these
-  are configured via UI env vars (`NOSTR_NSEC`, LNbits keys, etc.) that this
-  package's `conf/ui.env.j2` simply never sets. Nothing to disable — they're
-  off by omission.
+- **Bounties (LNbits/NWC/LNURL) and the `push_cost_sats` paywall**:
+  ~~*(superseded — see item 8, this was wrong)*~~ these turned out to need
+  **no server-side config at all**. Wallet details (`lud16`, `lnurl`, NWC
+  connection strings) live in each user's own browser storage or Nostr
+  profile metadata (`ui/src/lib/payments/resolve-repo-wallet.ts`), and the
+  server-side `/api/zap/*` / `/api/bounty/*` routes just proxy whatever
+  wallet the request itself supplies — there's no platform LNbits/NWC
+  secret to set. `push_cost_sats` is a per-repo Nostr event tag the repo
+  owner publishes from the repo settings page; the bridge reads it off the
+  event straight into its own `RepositoryPushPolicy` table
+  (`ui/gitnostr/cmd/git-nostr-bridge/repo.go`), no server env var involved.
+  So this feature was never "off" — it was always fully available,
+  peer-to-peer, exactly as upstream intends. Nothing to package.
 - **`repo_owner_pubkey`**: made optional. Left blank, `gitRepoOwners` in the
   bridge config is an empty JSON array, which upstream treats as "watch all
   authors" (their default "public GRASP" mode) rather than a filter that
   matches nothing — a single stray value would have done the latter, which
   is why `scripts/_common.sh`'s `csv_to_json_array` special-cases empty
   input instead of producing `[""]`.
-- **Blossom / Pages**: not wired up at all in this package (no
-  `NEXT_PUBLIC_BLOSSOM_URL` etc. set) — out of scope for a v0.1 self-hosted
-  git-forge package, not something that needed defaulting off.
+- **Blossom / GitHub OAuth / publisher blocklist**: originally left
+  unwired here too. That turned out to be a real gap rather than a
+  deliberate cut — fixed in item 8.
 
 ## 3. HTTP git vs SSH-only
 
@@ -183,20 +192,21 @@ changed (the framework pre-populates unchanged questions with their current
 value) — so both setters can reference both variables directly without an
 extra `ynh_app_setting_get` round-trip.
 
-**Still not exposed anywhere (install or config panel), left as manual
-`.env.production.local` / `git-nostr-bridge.json` edits + rebuild for an
-admin who wants them**: GitHub OAuth (import/rate-limit token), Blossom
-URLs (Pages/media storage — defaults to upstream's public `blossom.band`
-if a self-hoster ever touches Pages), Lightning bounties / `push_cost_sats`
-paywall (LNbits/NWC/LNURL keys, a whole payment-integration surface), the
-leaderboard/SEO-snapshot systemd timers (`infra/systemd/*.timer` upstream —
-without them, "Most Active"/sitemap features do a live relay scan per
-request instead of reading a warm cache), the CVE-alert bot, Telegram
-notifications, the publisher blocklist, and the WOT oracle URL override.
-None of these are required for the app to work; wiring all of them into the
-config panel would be a lot of surface for a v0.1 package per
-`doc/DECISIONS.md`'s own "keep things simple" framing from
-`config_panel.toml.example`.
+**At the time this item was written**, GitHub OAuth, Blossom URLs, and the
+publisher blocklist were also left unexposed here. That was later
+identified as a real gap (not a deliberate cut) and fixed — see item 8.
+Bounties/`push_cost_sats` need no config at all — see the correction in
+item 2.
+
+**Still genuinely left as manual edits, deliberately, because they're
+operational infrastructure rather than app config**: the leaderboard/
+SEO-snapshot systemd timers (`infra/systemd/*.timer` upstream — without
+them, "Most Active"/sitemap features do a live relay scan per request
+instead of reading a warm cache; see item 7 for the sitemap half of this),
+the CVE-alert bot, Telegram notifications, and the WoT oracle URL override.
+None of these are required for the app to work, and wiring them in would be
+a lot of surface for what they add — per `config_panel.toml.example`'s own
+"keep things simple" framing.
 
 ## 7. Sitemap default for a single-tenant instance
 
@@ -212,3 +222,56 @@ a slow one. An admin who wants full SEO coverage can unset this and
 manually install upstream's `scripts/install-gittr-seo-repo-index-timer.sh`
 — out of scope for this package (it assumes an `/opt/ngit`-shaped
 deployment, not `$install_dir`).
+
+## 8. GitHub OAuth, Blossom storage, publisher blocklist
+
+Asked directly whether GitHub OAuth, Blossom storage, bounties/paywall, and
+the publisher blocklist were properly accounted for. They weren't — see
+item 2 for the bounties correction (no work needed there); this item
+covers the three that were a real gap and are now wired up, config-panel
+only (no install-time question — these are optional/advanced, and the
+"keep things simple" install wizard shouldn't grow five more questions for
+features most installs won't touch).
+
+- **GitHub OAuth** (`github_client_id`, `github_client_secret`) and the
+  separate, unrelated **platform token** (`github_platform_token`, raises
+  GitHub API rate limits from 60/hr to 5000/hr — confirmed via
+  `ui/GITHUB_PLATFORM_TOKEN_SETUP.md`, a personal access token, nothing to
+  do with the OAuth App). All three are consumed via plain `process.env` in
+  Next.js API routes (`ui/src/pages/api/github/auth.ts`, `callback.ts`,
+  `graphql.ts`) — **server-only**, not `NEXT_PUBLIC_*`, so changing them
+  needs a service restart, not a UI rebuild. Deliberately **not** put in
+  `conf/systemd-ui.service` as inline `Environment=` lines even though
+  that would have worked functionally: systemd unit files are
+  world-readable, and `package_linter`'s own
+  `systemd_config_harden_security` check explicitly greps
+  `Environment=.*(pass|secret|key)` and errors on a match — `client_secret`
+  and `platform_token` would both trip it. Put them in a new
+  `conf/ui-runtime.env.j2` → `$install_dir/ui/.env.runtime` instead,
+  `chmod 600`, loaded via `EnvironmentFile=-...` (not `Environment=`).
+  `GITHUB_REDIRECT_URI` is derived (`https://$domain/api/github/callback`)
+  and regenerated in `scripts/change_url` too, since a domain change means
+  the OAuth callback URL registered with GitHub needs updating by hand
+  regardless.
+- **Blossom storage** (`blossom_url` → `NEXT_PUBLIC_BLOSSOM_URL`). This one
+  *is* `NEXT_PUBLIC_*` — build-time baked, same rebuild story as
+  `nostr_relays`. Defaults to upstream's own in-code default
+  (`https://blossom.band`, confirmed in `ui/.env.example`) rather than an
+  empty value, so the config-panel field always shows something sensible
+  rather than blank-meaning-something-implicit.
+- **Publisher blocklist** (`publisher_blocklist`) is really *two* upstream
+  vars for one concept — confirmed in `ui/.env.example`'s own comment:
+  `NEXT_PUBLIC_PUBLISHER_BLOCKLIST` (client-visible, build-time) hides
+  entries from browser-rendered lists, `PUBLISHER_BLOCKLIST` (server-only,
+  runtime) does the same for the API and sitemap. One config-panel
+  question now feeds both — `conf/ui.env.j2` for the public one,
+  `conf/ui-runtime.env.j2` for the server one — so a change always
+  triggers a full rebuild (needed for the public half) even though the
+  server half alone wouldn't have required one.
+
+`scripts/config` factors the repeated "write bridge config" / "rebuild UI"
+/ "write runtime env + restart" sequences into `rewrite_bridge_config`,
+`rebuild_ui`, and `write_ui_runtime_config` helpers rather than repeating
+them across five new setters.
+
+Re-ran `package_linter` after adding all of this — no new findings.

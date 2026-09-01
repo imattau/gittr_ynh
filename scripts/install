@@ -25,11 +25,30 @@ ynh_script_progression "Installing Node.js and yarn"
 ynh_exec_warn_less ynh_install_nodejs --nodejs_version=$NODEJS_VERSION
 ynh_use_nodejs
 
+ynh_script_progression "Initializing optional-feature settings"
+# GitHub OAuth, Blossom, and the publisher blocklist are config-panel-only
+# (no install-time question) — see doc/DECISIONS.md item 8. Initialized
+# here so scripts/config's getters have something to read from the start.
+ynh_app_setting_set --app=$app --key=github_client_id --value=""
+ynh_app_setting_set --app=$app --key=github_client_secret --value=""
+ynh_app_setting_set --app=$app --key=github_platform_token --value=""
+ynh_app_setting_set --app=$app --key=blossom_url --value="$DEFAULT_BLOSSOM_URL"
+ynh_app_setting_set --app=$app --key=publisher_blocklist --value=""
+github_client_id=""
+github_client_secret=""
+github_platform_token=""
+blossom_url="$DEFAULT_BLOSSOM_URL"
+publisher_blocklist=""
+
 ynh_script_progression "Writing UI build-time config"
 # NEXT_PUBLIC_* vars are inlined into the client bundle at build time, so
 # this must exist before `yarn build` runs — see conf/ui.env.j2.
 ynh_add_config --template="ui.env.j2" \
 	--destination="$install_dir/ui/.env.production.local"
+
+ynh_script_progression "Writing UI runtime config (GitHub OAuth / Blossom / blocklist)"
+ynh_add_config --template="ui-runtime.env.j2" \
+	--destination="$install_dir/ui/.env.runtime"
 
 ynh_script_progression "Building the UI"
 pushd "$install_dir/ui"
@@ -70,6 +89,7 @@ chmod 700 "$install_dir/.ssh"
 chmod 700 "$ssh_host_key_dir"
 chmod 600 "$ssh_host_key_dir/ssh_host_ed25519_key" "$ssh_host_key_dir/sshd_config"
 chmod 600 "$install_dir/$bridge_config_dir/$bridge_config_file"
+chmod 600 "$install_dir/ui/.env.runtime"
 
 ynh_script_progression "Enabling and starting services"
 yunohost service add "$app-bridge" --description="gitnostr bridge (repo/SSH-key sync from Nostr)" --log="/var/log/$app/bridge.log"

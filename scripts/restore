@@ -11,6 +11,7 @@ chown -R "$app:$app" "$install_dir"
 chmod 700 "$install_dir/.ssh" "$install_dir/ssh"
 chmod 600 "$install_dir/ssh/ssh_host_ed25519_key" "$install_dir/ssh/sshd_config"
 chmod 600 "$install_dir/$bridge_config_dir/$bridge_config_file"
+chmod 600 "$install_dir/ui/.env.runtime"
 
 ynh_script_progression "Reinstalling the Go and Node.js toolchains"
 # goenv/n install shared toolchains outside install_dir, so they aren't part

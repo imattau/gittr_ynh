@@ -6,6 +6,41 @@ source /usr/share/yunohost/helpers
 ynh_abort_if_errors
 
 #=================================================
+# SHARED HELPERS
+#=================================================
+# $nostr_relays, $repo_owner_pubkey, $blossom_url, $publisher_blocklist,
+# $github_client_id, $github_client_secret, $github_platform_token are all
+# ambient here regardless of which question actually changed: YunoHost
+# loads every app setting as a bash var before any script runs, and the
+# config-panel helper additionally pre-populates each panel question with
+# its current value when unchanged — see ynh_app_config_run's
+# _ynh_app_config_validate in YunoHost core.
+
+rewrite_bridge_config() {
+	nostr_relays_json_array=$(csv_to_json_array "$nostr_relays")
+	git_repo_owners_json_array=$(csv_to_json_array "$repo_owner_pubkey")
+	ynh_add_config --template="bridge-config.json.j2" \
+		--destination="$install_dir/$bridge_config_dir/$bridge_config_file"
+}
+
+rebuild_ui() {
+	ynh_script_progression "Rebuilding the UI (this can take a minute or two)"
+	ynh_use_nodejs
+	ynh_add_config --template="ui.env.j2" \
+		--destination="$install_dir/ui/.env.production.local"
+	pushd "$install_dir/ui"
+		ynh_exec_warn_less yarn build
+	popd
+	ynh_systemd_action --service_name="$app-ui" --action="restart" --log_path="systemd"
+}
+
+write_ui_runtime_config() {
+	ynh_add_config --template="ui-runtime.env.j2" \
+		--destination="$install_dir/ui/.env.runtime"
+	chmod 600 "$install_dir/ui/.env.runtime"
+}
+
+#=================================================
 # GETTERS
 #=================================================
 
@@ -17,44 +52,77 @@ get__repo_owner_pubkey() {
 	ynh_app_setting_get --app=$app --key=repo_owner_pubkey
 }
 
+get__github_client_id() {
+	ynh_app_setting_get --app=$app --key=github_client_id
+}
+
+get__github_client_secret() {
+	ynh_app_setting_get --app=$app --key=github_client_secret
+}
+
+get__github_platform_token() {
+	ynh_app_setting_get --app=$app --key=github_platform_token
+}
+
+get__blossom_url() {
+	ynh_app_setting_get --app=$app --key=blossom_url
+}
+
+get__publisher_blocklist() {
+	ynh_app_setting_get --app=$app --key=publisher_blocklist
+}
+
 #=================================================
 # SETTERS
 #=================================================
-# $nostr_relays and $repo_owner_pubkey are ambient here: the config-panel
-# helper pre-populates both with either the newly submitted value or the
-# current setting, regardless of which one actually changed — see
-# ynh_app_config_run's _ynh_app_config_validate in YunoHost core.
 
 set__nostr_relays() {
 	ynh_app_setting_set --app=$app --key=nostr_relays --value="$nostr_relays"
-
 	ynh_script_progression "Updating bridge config for the new relay list"
-	nostr_relays_json_array=$(csv_to_json_array "$nostr_relays")
-	git_repo_owners_json_array=$(csv_to_json_array "$repo_owner_pubkey")
-	ynh_add_config --template="bridge-config.json.j2" \
-		--destination="$install_dir/$bridge_config_dir/$bridge_config_file"
-
-	ynh_script_progression "Rebuilding the UI (this can take a minute or two)"
-	ynh_use_nodejs
-	ynh_add_config --template="ui.env.j2" \
-		--destination="$install_dir/ui/.env.production.local"
-	pushd "$install_dir/ui"
-		ynh_exec_warn_less yarn build
-	popd
-
-	ynh_systemd_action --service_name="$app-ui" --action="restart" --log_path="systemd"
+	rewrite_bridge_config
+	rebuild_ui
 }
 
 set__repo_owner_pubkey() {
 	ynh_app_setting_set --app=$app --key=repo_owner_pubkey --value="$repo_owner_pubkey"
-
 	ynh_script_progression "Updating bridge config for the new repo owner"
-	nostr_relays_json_array=$(csv_to_json_array "$nostr_relays")
-	git_repo_owners_json_array=$(csv_to_json_array "$repo_owner_pubkey")
-	ynh_add_config --template="bridge-config.json.j2" \
-		--destination="$install_dir/$bridge_config_dir/$bridge_config_file"
-	# config_panel.toml's `services = ["__APP__-bridge"]` restarts the
-	# bridge automatically after this setter runs — no explicit restart here.
+	rewrite_bridge_config
+	# config_panel.toml's panel-level `services = ["__APP__-bridge"]`
+	# restarts the bridge automatically after this setter runs.
+}
+
+set__github_client_id() {
+	ynh_app_setting_set --app=$app --key=github_client_id --value="$github_client_id"
+	ynh_script_progression "Updating GitHub OAuth config"
+	write_ui_runtime_config
+	ynh_systemd_action --service_name="$app-ui" --action="restart" --log_path="systemd"
+}
+
+set__github_client_secret() {
+	ynh_app_setting_set --app=$app --key=github_client_secret --value="$github_client_secret"
+	ynh_script_progression "Updating GitHub OAuth config"
+	write_ui_runtime_config
+	ynh_systemd_action --service_name="$app-ui" --action="restart" --log_path="systemd"
+}
+
+set__github_platform_token() {
+	ynh_app_setting_set --app=$app --key=github_platform_token --value="$github_platform_token"
+	ynh_script_progression "Updating GitHub platform token"
+	write_ui_runtime_config
+	ynh_systemd_action --service_name="$app-ui" --action="restart" --log_path="systemd"
+}
+
+set__blossom_url() {
+	ynh_app_setting_set --app=$app --key=blossom_url --value="$blossom_url"
+	ynh_script_progression "Updating Blossom server URL"
+	rebuild_ui
+}
+
+set__publisher_blocklist() {
+	ynh_app_setting_set --app=$app --key=publisher_blocklist --value="$publisher_blocklist"
+	ynh_script_progression "Updating publisher blocklist"
+	write_ui_runtime_config
+	rebuild_ui
 }
 
 ynh_app_config_run "$1"

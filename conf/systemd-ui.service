@@ -25,6 +25,12 @@ Environment=GIT_NOSTR_BRIDGE_REPOS_DIR=__INSTALL_DIR__/repositories
 # optional SEO-snapshot timer, so without this, every /sitemap.xml request
 # does a live, uncached Nostr relay scan. See doc/DECISIONS.md item 7.
 Environment=SITEMAP_SKIP_NOSTR=1
+# GitHub OAuth / platform token / publisher blocklist — optional, may be
+# unconfigured (all blank). In a file (mode 600, EnvironmentFile=), not
+# inline Environment=, because it can hold secrets and unit files are
+# world-readable. The leading '-' means "don't fail if the file is
+# missing", though scripts/install always creates it.
+EnvironmentFile=-__INSTALL_DIR__/ui/.env.runtime
 
 # Sandboxing options to harden security.
 # Details: https://www.freedesktop.org/software/systemd/man/systemd.exec.html

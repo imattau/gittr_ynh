@@ -58,9 +58,12 @@ any Nostr client. The bridge picks them up from the relays and rewrites
 - Leaving the owner pubkey blank switches the bridge to upstream's default
   "watch all authors" mode rather than filtering to nobody — see
   doc/DECISIONS.md item 2.
-- Optional paid features (bounties via LNbits/NWC/LNURL, Blossom blobs,
-  `push_cost_sats` paywall) are configured via UI env vars this package
-  never sets, so they're off by default, not merely hidden.
+- **Lightning bounties, zaps, and the `push_cost_sats` push paywall need no
+  server-side config and are already fully available** — every user brings
+  their own wallet (Lightning address / LNURL / NWC connection string,
+  entered in their own Settings or read from their Nostr profile), and
+  `push_cost_sats` is a per-repo setting the repo owner publishes from
+  their own repo settings page. There is nothing to enable here.
 - **Changing the domain requires a UI rebuild**, not just a config reload —
   `NEXT_PUBLIC_*` vars are inlined into the client bundle at `next build`
   time. `scripts/change_url` handles this; a manual edit of
@@ -69,28 +72,61 @@ any Nostr client. The bridge picks them up from the relays and rewrites
 
 ## Changing config after install
 
-`nostr_relays` and `repo_owner_pubkey` can be changed after install via:
+All of the below can be changed via `yunohost app config get/set gittr` or
+the webadmin's Apps → gittr → Config Panel:
 
 ```
 yunohost app config get gittr
 yunohost app config set gittr nostr_relays -v "wss://relay1,wss://relay2"
 yunohost app config set gittr repo_owner_pubkey -v "<64-char hex pubkey>"
+yunohost app config set gittr blossom_url -v "https://your-blossom-host"
+yunohost app config set gittr publisher_blocklist -v "<pubkey1>,<pubkey2>"
+yunohost app config set gittr github_client_id -v "<client id>"
+yunohost app config set gittr github_client_secret -v "<client secret>"
+yunohost app config set gittr github_platform_token -v "<personal access token>"
 ```
 
-— or the webadmin's Apps → gittr → Config Panel. **Changing `nostr_relays`
-rebuilds the UI** (same reason as changing the domain, above) and can take
-a minute or two; changing `repo_owner_pubkey` only restarts the bridge and
-is fast. See doc/DECISIONS.md item 6.
+**`nostr_relays`, `blossom_url`, and `publisher_blocklist` all trigger a
+full UI rebuild** (can take a minute or two) — they're `NEXT_PUBLIC_*`
+vars, baked into the client bundle at build time, not read at runtime.
+`repo_owner_pubkey` and the three GitHub settings only restart a service
+and are fast. See doc/DECISIONS.md items 6 and 8.
 
-**Not exposed anywhere (install question or config panel) — manual
-`ui/.env.production.local` / `.config/git-nostr/git-nostr-bridge.json`
-edits + a rebuild only**: GitHub OAuth, Blossom storage URLs (Pages/media —
-falls back to upstream's public `blossom.band` if you touch Pages without
-setting this), Lightning bounties / the `push_cost_sats` push paywall
-(LNbits/NWC/LNURL), the leaderboard/SEO-snapshot systemd timers, the
-CVE-alert bot, Telegram notifications, the publisher blocklist, and the WoT
-oracle URL. None of these are required for the app to function. Full list
-and reasoning in doc/DECISIONS.md item 6.
+### GitHub integration
+
+Two independent things, both optional:
+
+- **OAuth login** (`github_client_id` + `github_client_secret`) — create an
+  OAuth App at <https://github.com/settings/developers> with callback URL
+  `https://yourdomain/api/github/callback`, then set both values. Missing
+  either one leaves GitHub login disabled with a clear in-app error;
+  nothing else breaks.
+- **Platform token** (`github_platform_token`) — a personal access token
+  from <https://github.com/settings/tokens> (scope: `public_repo`), unrelated
+  to the OAuth App above. Raises GitHub API rate limits from 60/hr to
+  5000/hr for import/mirroring features. Skip it if you don't need that.
+
+### Blossom storage
+
+`blossom_url` defaults to upstream's own public `https://blossom.band` —
+this package doesn't self-host Blossom. Point it at your own Blossom
+server if you have one and want Pages/media uploads to land there instead.
+
+### Publisher blocklist
+
+`publisher_blocklist` hides listed pubkeys (hex or `npub1…`, comma or
+space separated) from explore/home/repos listings, `/apps`, `/pages`, and
+the sitemap — both the browser-rendered and server/API views (this one
+setting feeds both of upstream's `NEXT_PUBLIC_PUBLISHER_BLOCKLIST` and
+`PUBLISHER_BLOCKLIST`).
+
+### Still genuinely left as manual edits
+
+The leaderboard/SEO-snapshot systemd timers, the CVE-alert bot, Telegram
+notifications, and the WoT oracle URL override aren't exposed anywhere —
+they're operational infrastructure (extra timers/processes) rather than
+app config, and none are required for the app to work. See
+doc/DECISIONS.md item 6 if you want to wire one up by hand.
 
 By default `/sitemap.xml` skips live Nostr relay scans
 (`SITEMAP_SKIP_NOSTR=1` in `conf/systemd-ui.service`) since this package

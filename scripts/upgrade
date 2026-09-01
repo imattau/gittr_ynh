@@ -21,11 +21,21 @@ pushd "$install_dir/$bridge_dir"
 	make git-nostr-bridge
 popd
 
+ynh_script_progression "Reading optional-feature settings"
+# github_client_id/secret/platform_token/publisher_blocklist read as empty
+# is correct if unset. blossom_url falls back here for apps upgrading from
+# before this setting existed — see doc/DECISIONS.md item 8.
+blossom_url=$(ynh_app_setting_get --app=$app --key=blossom_url)
+blossom_url="${blossom_url:-$DEFAULT_BLOSSOM_URL}"
+ynh_app_setting_set --app=$app --key=blossom_url --value="$blossom_url"
+
 ynh_script_progression "Rebuilding the UI"
 ynh_install_nodejs --nodejs_version=$NODEJS_VERSION
 ynh_use_nodejs
 ynh_add_config --template="ui.env.j2" \
 	--destination="$install_dir/ui/.env.production.local"
+ynh_add_config --template="ui-runtime.env.j2" \
+	--destination="$install_dir/ui/.env.runtime"
 pushd "$install_dir/ui"
 	corepack enable
 	corepack prepare yarn@stable --activate
@@ -56,6 +66,7 @@ chown -R "$app:$app" "$install_dir"
 chmod 700 "$install_dir/.ssh" "$install_dir/ssh"
 chmod 600 "$install_dir/ssh/ssh_host_ed25519_key" "$install_dir/ssh/sshd_config"
 chmod 600 "$install_dir/$bridge_config_dir/$bridge_config_file"
+chmod 600 "$install_dir/ui/.env.runtime"
 
 ynh_script_progression "Starting services"
 yunohost service add "$app-bridge" --description="gitnostr bridge (repo/SSH-key sync from Nostr)" --log="/var/log/$app/bridge.log"

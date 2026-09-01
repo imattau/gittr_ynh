@@ -17,6 +17,11 @@ bridge_config_dir=".config/git-nostr"
 bridge_config_file="git-nostr-bridge.json"
 repositories_dir="repositories"
 
+# Upstream's own in-code default (ui/.env.example) — used as this package's
+# initial blossom_url setting so the field always has a value to show/edit
+# in the config panel, see doc/DECISIONS.md item 8.
+DEFAULT_BLOSSOM_URL="https://blossom.band"
+
 # Turns a comma-separated list into a JSON array of strings, e.g.
 # "a,b" -> "\"a\",\"b\"". Used to fill __NOSTR_RELAYS_JSON_ARRAY__ and
 # __GIT_REPO_OWNERS_JSON_ARRAY__ in bridge-config.json.j2. An empty input

@@ -16,6 +16,13 @@ ynh_script_progression "Rebuilding the UI for the new domain"
 ynh_use_nodejs
 ynh_add_config --template="ui.env.j2" \
 	--destination="$install_dir/ui/.env.production.local"
+# GITHUB_REDIRECT_URI is domain-dependent too (server-only, so no rebuild
+# needed for it specifically — but regenerate it here anyway for
+# consistency, and because the GitHub OAuth App's callback URL registered
+# with GitHub itself will need updating by hand to match the new domain).
+ynh_add_config --template="ui-runtime.env.j2" \
+	--destination="$install_dir/ui/.env.runtime"
+chmod 600 "$install_dir/ui/.env.runtime"
 pushd "$install_dir/ui"
 	ynh_exec_warn_less yarn build
 popd

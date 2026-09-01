@@ -37,3 +37,59 @@ services = ["__APP__-bridge"]
         """
         pattern.regexp = '^([0-9a-fA-F]{64})?$'
         pattern.error = "Must be a 64-character hex pubkey, or left blank"
+
+    [main.github]
+    name.en = "GitHub integration (optional)"
+    help.en = """\
+    Requires a GitHub OAuth App you create yourself at \
+    https://github.com/settings/developers — callback URL \
+    https://__DOMAIN__/api/github/callback — see doc/ADMIN.md.\
+    """
+
+        [main.github.github_client_id]
+        ask.en = "OAuth App client ID"
+        type = "string"
+        optional = true
+        bind = "null"
+
+        [main.github.github_client_secret]
+        ask.en = "OAuth App client secret"
+        type = "password"
+        optional = true
+        redact = true
+        bind = "null"
+
+        [main.github.github_platform_token]
+        ask.en = "Personal access token (raises GitHub API rate limits)"
+        type = "password"
+        optional = true
+        redact = true
+        bind = "null"
+        help.en = "Optional and separate from the OAuth App above — see doc/ADMIN.md."
+
+    [main.blossom]
+    name.en = "Blossom storage"
+
+        [main.blossom.blossom_url]
+        ask.en = "Blossom server URL (Pages / media uploads)"
+        type = "url"
+        bind = "null"
+        help.en = """\
+        Defaults to upstream's own public blossom.band — this package does \
+        not self-host Blossom. Changing this rebuilds the web UI \
+        (NEXT_PUBLIC_BLOSSOM_URL is build-time baked, like nostr_relays \
+        above), so it can take a minute or two.\
+        """
+
+    [main.moderation]
+    name.en = "Moderation"
+
+        [main.moderation.publisher_blocklist]
+        ask.en = "Publisher blocklist (hex pubkeys / npub1…, comma or space separated)"
+        type = "string"
+        optional = true
+        bind = "null"
+        help.en = """\
+        Hides listed authors from explore/home/repos/sitemap. Changing this \
+        rebuilds the web UI, same as the two settings above.\
+        """
