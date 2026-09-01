@@ -1,9 +1,12 @@
 #!/bin/bash
 
-source _common.sh
+# Keep this path for calling _common.sh inside the execution context of
+# backup and restore scripts
+source ../settings/scripts/_common.sh
 source /usr/share/yunohost/helpers
 
-ynh_script_progression "Backing up the app main directory"
+ynh_print_info "Declaring files to be backed up..."
+
 ynh_backup --src_path="$install_dir"
 
 # This includes repositories/ (bare repos) and data/git-nostr-db.sqlite,
@@ -12,12 +15,9 @@ ynh_backup --src_path="$install_dir"
 # separate git-based mirroring strategy for repo content instead
 # (see doc/DECISIONS.md item 5).
 
-ynh_script_progression "Backing up NGINX configuration"
 ynh_backup --src_path="/etc/nginx/conf.d/$domain.d/$app.conf"
 
 # systemd units are NOT backed up here on purpose: scripts/restore
 # regenerates them from templates instead of restoring a byte-for-byte copy,
 # since they bake in an absolute path to the go/node binary that may change
 # on restore (e.g. onto a fresh server) — see scripts/restore.
-
-ynh_script_progression "Backup complete"

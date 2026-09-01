@@ -15,6 +15,7 @@ code = "https://github.com/arbadacarbaYK/gittr"
 
 [integration]
 yunohost = ">= 11.2"
+helpers_version = "2.1"
 architectures = "all"
 multi_instance = false
 ldap = false
@@ -36,13 +37,15 @@ ram.runtime = "512M"
 
     [install.nostr_relays]
     type = "string"
+    ask.en = "Which Nostr relays should the bridge and UI use?"
     default = "wss://relay.damus.io,wss://nos.lol"
     help.en = "Comma-separated relay list the bridge and UI will use."
 
     [install.repo_owner_pubkey]
     type = "string"
     optional = true
-    help.en = "Hex nostr pubkey allowed to own/create repos on this bridge. Leave blank to watch all authors (upstream's default 'public GRASP' mode) — see doc/DECISIONS.md item 2."
+    ask.en = "Hex pubkey allowed to own/create repos on this bridge (optional)"
+    help.en = "Leave blank to watch all authors (upstream's default 'public GRASP' mode) — see doc/DECISIONS.md item 2."
 
 [resources]
     [resources.system_user]

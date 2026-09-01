@@ -21,5 +21,26 @@ RestartSec=5
 Environment=GIT_NOSTR_BRIDGE_DB=__INSTALL_DIR__/data/git-nostr-db.sqlite
 Environment=GIT_NOSTR_BRIDGE_REPOS_DIR=__INSTALL_DIR__/repositories
 
+# Sandboxing options to harden security.
+# Details: https://www.freedesktop.org/software/systemd/man/systemd.exec.html
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+DevicePolicy=closed
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProtectSystem=full
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=~@clock @debug @module @mount @obsolete @reboot @setuid @swap @cpu-emulation @privileged
+CapabilityBoundingSet=
+
 [Install]
 WantedBy=multi-user.target

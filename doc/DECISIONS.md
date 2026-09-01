@@ -5,6 +5,41 @@ upstream source (`arbadacarbaYK/gittr`, `ui/gitnostr/` bridge) instead of
 guessing. Re-verify anything version-specific before trusting it blindly —
 this repo is under active development (pushed daily as of 2026-09-01).
 
+## 0. Linter run (YunoHost `package_linter`)
+
+Ran `package_linter.py` against this repo. Accepted, not fixed, on purpose:
+
+- **`conf/sshd_config.j2:12` binding to `0.0.0.0`.** The linter's heuristic
+  assumes ports are meant to sit behind nginx/SSO. `$port_git_ssh` is raw
+  SSH, not HTTP — it has to be reachable directly from the internet, SSO
+  can't proxy it. `ListenAddress 0.0.0.0` (IPv4-only, not the wildcard `::`)
+  is deliberate.
+- **Catalog checks** ("not in YunoHost's catalog", "not flagged working",
+  "no category"). Expected — this targets a custom catalog
+  (`imattau/nostr_catalog_ynh`), not `github.com/YunoHost/apps`.
+- **README badge warning.** The linter wants either the official
+  README-generator's marker text or a working `dash.yunohost.org` badge for
+  a catalog-listed app id. Neither applies here for the same reason as
+  above — `README.md` says so explicitly instead of faking the marker.
+
+Everything else the linter flagged was a real issue and got fixed: helpers
+2.0→2.1 declaration, missing `ask` strings, wrong `_common.sh` source path
+in backup/restore, missing `LICENSE`/`README.md`/`tests.toml`, inconsistent
+`yunohost service add` calls between install/upgrade/restore, and missing
+systemd sandboxing directives.
+
+One more accepted-not-fixed: the linter still reports "encouraged to harden
+security" (ⓘ, non-blocking) for all three `conf/*.service` files even after
+`CapabilityBoundingSet`, `Protect*`, `SystemCallFilter`, and `PrivateTmp`
+were all added. Its own check
+(`tests/test_configurations.py::systemd_config_harden_security`) greps for
+`^\s{directive}=` — a literal single whitespace before the directive name,
+missing the `*` that would make it "any amount of leading whitespace
+including none". Directives at column 0 (the normal style, and what
+`example_ynh`'s own reference file uses) never match. Confirmed by testing
+the regex directly rather than assuming — this is a linter bug, not a real
+gap; not worth reformatting the files to dodge it.
+
 ## 1. Pin a commit
 
 Pinned to tag **`v0.2.6`** (latest as of 2026-09-01, matches `go.mod`'s

@@ -63,7 +63,7 @@ ynh_add_nginx_config
 
 ynh_script_progression "Setting permissions"
 # The bridge runs with HOME=$install_dir (see systemd-bridge.service) and
-# writes authorized_keys to $HOME/.ssh — NOT /home/$app/.ssh.
+# writes authorized_keys under that HOME's .ssh directory.
 mkdir -p "$install_dir/.ssh"
 chown -R "$app:$app" "$install_dir"
 chmod 700 "$install_dir/.ssh"

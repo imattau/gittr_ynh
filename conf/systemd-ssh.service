@@ -10,5 +10,32 @@ ExecStart=/usr/sbin/sshd -D -e -f __INSTALL_DIR__/ssh/sshd_config
 Restart=on-failure
 RestartSec=5
 
+# Sandboxing options to harden security. Kept more conservative than the
+# bridge/UI units: this is sshd itself, forking per-connection into
+# git-nostr-ssh -> git-upload-pack/git-receive-pack. Left out on purpose:
+# CapabilityBoundingSet= (empty) and SystemCallFilter's ~@setuid — sshd
+# still performs self-referential setuid/setgid session setup even though
+# it never changes to a *different* uid here (see conf/sshd_config.j2's
+# UsePAM no / single-AllowUsers design), and locking those down risks
+# breaking session setup for a component where that's hard to debug.
+# Details: https://www.freedesktop.org/software/systemd/man/systemd.exec.html
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+DevicePolicy=closed
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProtectSystem=full
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=~@clock @debug @module @mount @obsolete @reboot @swap @cpu-emulation @privileged
+
 [Install]
 WantedBy=multi-user.target

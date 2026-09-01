@@ -58,6 +58,8 @@ chmod 600 "$install_dir/ssh/ssh_host_ed25519_key" "$install_dir/ssh/sshd_config"
 chmod 600 "$install_dir/$bridge_config_dir/$bridge_config_file"
 
 ynh_script_progression "Starting services"
+yunohost service add "$app-bridge" --description="gitnostr bridge (repo/SSH-key sync from Nostr)" --log="/var/log/$app/bridge.log"
+yunohost service add "$app-ssh" --description="dedicated sshd for git-nostr-ssh"
 ynh_systemd_action --service_name="$app-bridge" --action="start" --log_path="systemd"
 ynh_systemd_action --service_name="$app-ui" --action="start" --log_path="systemd"
 ynh_systemd_action --service_name="$app-ssh" --action="start" --log_path="systemd"

@@ -19,5 +19,26 @@ Environment=HOME=__INSTALL_DIR__
 # as a resources.ports entry, so YunoHost's firewall keeps it closed from
 # the outside by default. See doc/DECISIONS.md item 3.
 
+# Sandboxing options to harden security.
+# Details: https://www.freedesktop.org/software/systemd/man/systemd.exec.html
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+DevicePolicy=closed
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProtectSystem=full
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=~@clock @debug @module @mount @obsolete @reboot @setuid @swap @cpu-emulation @privileged
+CapabilityBoundingSet=
+
 [Install]
 WantedBy=multi-user.target

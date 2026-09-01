@@ -1,0 +1,9 @@
+#:schema https://raw.githubusercontent.com/YunoHost/apps/main/schemas/tests.v1.schema.json
+
+test_format = 1.0
+
+[default]
+
+    # multi_instance = false in the manifest — installing a second instance
+    # is expected to fail, so there's no point testing it.
+    exclude = ["install.multi"]
