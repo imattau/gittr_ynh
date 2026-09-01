@@ -14,6 +14,13 @@ ynh_script_progression "Building git-nostr-bridge"
 # Go is provisioned via the resources.go manifest resource and already on
 # $PATH (sourcing the helpers above did that automatically) — no scripted
 # install call needed, see doc/DECISIONS.md item 9.
+# $HOME isn't set in this script's execution environment, so `go build`
+# can't derive a default module cache location ("neither GOMODCACHE nor
+# GOPATH is set") — point it at a scratch dir explicitly. See
+# doc/DECISIONS.md item 10.
+export GOPATH="/var/cache/yunohost/gittr-go-build"
+export GOCACHE="$GOPATH/build-cache"
+mkdir -p "$GOPATH"
 # `make git-nostr-bridge` builds both bin/git-nostr-bridge and bin/git-nostr-ssh
 # in one target; there is no separate git-nostr-ssh make target.
 pushd "$install_dir/$bridge_dir"

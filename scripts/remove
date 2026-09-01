@@ -20,4 +20,8 @@ ynh_secure_remove --file="$install_dir"
 # and resources.apt are deprovisioned automatically as part of the standard
 # app-removal resource lifecycle. See doc/DECISIONS.md item 9.
 
+# The go build module cache (see doc/DECISIONS.md item 10) isn't tracked by
+# any resource and won't be cleaned up automatically.
+ynh_secure_remove --file="/var/cache/yunohost/gittr-go-build"
+
 ynh_script_progression "Removal complete"

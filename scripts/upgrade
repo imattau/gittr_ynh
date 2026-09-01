@@ -16,7 +16,12 @@ ynh_setup_source --dest_dir="$install_dir" \
 
 ynh_script_progression "Rebuilding git-nostr-bridge"
 # Go is a manifest resource, already on $PATH from sourcing the helpers
-# above — see doc/DECISIONS.md item 9.
+# above — see doc/DECISIONS.md item 9. $HOME isn't set here either, so
+# point the module cache at the same scratch dir install uses — see
+# doc/DECISIONS.md item 10.
+export GOPATH="/var/cache/yunohost/gittr-go-build"
+export GOCACHE="$GOPATH/build-cache"
+mkdir -p "$GOPATH"
 pushd "$install_dir/$bridge_dir"
 	make git-nostr-bridge
 popd

@@ -354,3 +354,39 @@ because the v1 and v2.1 function *names* looked equally plausible and I
 didn't cross-check the file that actually gets sourced for this
 `helpers_version`. Not proud of it, but better to record the miss
 precisely than bury it.
+
+## 10. `go build`: module cache location
+
+Second real-install failure, one step further than item 9's fix (which
+worked — `resources.go`/`resources.nodejs` provisioned Go 1.25.13 and Node
+20.20.2 cleanly):
+
+```
+go build -tags netgo -ldflags="-s -w" -trimpath -o ./bin/git-nostr-bridge ./cmd/git-nostr-bridge
+go: module cache not found: neither GOMODCACHE nor GOPATH is set
+make: *** [Makefile:5: git-nostr-bridge] Error 1
+```
+
+`$HOME` isn't set in the environment `scripts/install`/`scripts/upgrade`
+run in, and Go derives its default `GOPATH` (and from that, `GOMODCACHE`)
+from `$HOME` — with neither set, `go build` has nowhere to put downloaded
+module sources and refuses to proceed. Fixed by exporting `GOPATH`
+(and `GOCACHE`, for the build cache) explicitly, at a path outside
+`$install_dir` so it doesn't get swept up in `_ynh_apply_default_permissions`
+or complicate `--keep` on upgrade:
+
+```bash
+export GOPATH="/var/cache/yunohost/gittr-go-build"
+export GOCACHE="$GOPATH/build-cache"
+mkdir -p "$GOPATH"
+```
+
+`/var/cache/yunohost/` is YunoHost's own convention for this kind of
+scratch state (already used for the source tarball download cache, visible
+in the same install log). Left in place across upgrades deliberately — it
+speeds up `go build` by reusing the module cache — but cleaned up in
+`scripts/remove`, since it isn't tracked by any resource and would
+otherwise be orphaned after the app is removed.
+
+Not needed in `scripts/restore`: restore doesn't rebuild the bridge, it
+restores the already-built binary from the backup archive.
