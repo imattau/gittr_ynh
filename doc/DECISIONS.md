@@ -1080,3 +1080,67 @@ upstream ships the ACL endpoint and this package's pin can move to
 include it; SSH already has full, working owner/permission enforcement
 for push in the meantime and remains the way to write to a repo
 remotely.
+
+## 23. Repos permanently stuck on "Published (Awaiting Bridge)"
+
+Asked to check why the UI always shows this status. Checked the bridge's
+own log for the actual repo in question first — it was **not** stuck at
+all from the bridge's side:
+
+```
+📥 [Bridge] Received event: kind=30617, ... pubkey=b5d34eed...
+📦 [Bridge] Processing repository event: kind=30617 ...
+✅ [Bridge] Repository updated: ... repo=gittr-ynh-test
+✅ [Bridge] Successfully processed repository event: id=...
+```
+
+Fully processed, repo created on disk — matches the earlier successful
+`git clone` test independently. So the *repo* wasn't stuck; the UI's
+*displayed status* was. "Published (Awaiting Bridge)" turned out to be
+a real, named, documented upstream status — found in
+`docs/CONTRIBUTION_PROPOSAL.md`: *"the bridge must wait for relay
+propagation (10-60 seconds) before processing. This creates a poor UX
+where users see 'Published (Awaiting Bridge)' status for extended
+periods."* Upstream's own fix for this is the bridge's `/api/event`
+HTTP fast-lane — POST the signed event there directly instead of
+waiting on relay propagation, confirmed in <1s instead of 10-60s.
+
+Checked how the browser actually reaches that fast lane rather than
+assuming it needs the bridge's raw port exposed publicly (it doesn't):
+the browser calls `/api/nostr/repo/event`, a route on the **UI's own**
+Next.js server (same origin), which then proxies server-side to the
+bridge. Read that route's actual source
+(`ui/src/pages/api/nostr/repo/event.ts`):
+
+```ts
+const bridgePort = process.env.BRIDGE_HTTP_PORT || "8080";
+const bridgeHost = process.env.BRIDGE_HTTP_HOST || "localhost";
+const bridgeUrl = `http://${bridgeHost}:${bridgePort}/api/event`;
+```
+
+`conf/systemd-bridge.service` sets `BRIDGE_HTTP_PORT` for the *bridge*
+(pointed at `$port_bridge_http`, auto-shifted to `8082` on the live box
+since `8080` — upstream's hardcoded fallback — was already taken; see
+item 13). `conf/systemd-ui.service` never set the *same* variable for
+the *UI* process — so the UI's proxy route always fell back to its own
+`"8080"` default, POSTing the fast-lane confirmation into a port nothing
+was listening on. Every single repo action silently lost the fast lane
+and fell all the way back to the slow 10-60s relay-propagation path —
+matching the symptom exactly, and explaining why it looked "always"
+stuck rather than occasionally slow: the fast lane never once worked on
+this instance.
+
+Fixed by adding `Environment=BRIDGE_HTTP_PORT=__PORT_BRIDGE_HTTP__` to
+`conf/systemd-ui.service`, so both processes agree on the actual
+(possibly auto-shifted) port rather than one of them trusting upstream's
+hardcoded default. `BRIDGE_HTTP_HOST` left unset — `localhost` is
+correct as-is, both processes run on the same host.
+
+This is the same category of bug as item 20 (a fix landing in only one
+of two places that need to agree with each other), just one hop removed:
+the port-collision fix in item 13 was correct and complete for the
+bridge side, but introduced this on the UI side by making the actual
+port divorced from upstream's assumed constant — worth remembering
+whenever a resource-assigned value (a port, in this case) is consumed by
+more than one process: check *everywhere* that value is assumed, not
+just the process it was originally added for.

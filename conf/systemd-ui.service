@@ -20,6 +20,16 @@ RestartSec=5
 # explicitly rather than rely on that fallback. See doc/DECISIONS.md item 3.
 Environment=GIT_NOSTR_BRIDGE_DB=__INSTALL_DIR__/data/git-nostr-db.sqlite
 Environment=GIT_NOSTR_BRIDGE_REPOS_DIR=__INSTALL_DIR__/repositories
+# The UI's own /api/nostr/repo/event route proxies to the bridge's HTTP
+# fast-lane (ui/src/pages/api/nostr/repo/event.ts:
+# `process.env.BRIDGE_HTTP_PORT || "8080"`) for instant repo-event
+# confirmation — without this, every push/create falls back to the slow
+# ~10-60s relay-propagation path and the UI sits on "Published (Awaiting
+# Bridge)" for the whole wait, confirmed live. Must match
+# systemd-bridge.service's own BRIDGE_HTTP_PORT ($port_bridge_http),
+# which won't always be upstream's hardcoded 8080 default if that port
+# was already taken. See doc/DECISIONS.md item 23.
+Environment=BRIDGE_HTTP_PORT=__PORT_BRIDGE_HTTP__
 # Server-only (read at request time, unlike NEXT_PUBLIC_* above — safe to
 # change here without a rebuild). This package doesn't install upstream's
 # optional SEO-snapshot timer, so without this, every /sitemap.xml request
