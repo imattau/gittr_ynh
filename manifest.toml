@@ -4,7 +4,7 @@ id = "gittr"
 name = "gittr"
 description.en = "Self-hosted git forge on Nostr (NIP-34), with the gitnostr bridge for SSH git access"
 
-version = "0.1~ynh5"
+version = "0.1~ynh6"
 
 maintainers = ["imattau"]
 
@@ -35,6 +35,20 @@ ram.runtime = "512M"
     [install.admin]
     type = "user"
 
+    [install.init_main_permission]
+    # Generic reserved question — YunoHost's core handles the ask string and
+    # the public/private choice, and seeds the `main` SSOwat permission's
+    # allowed group from it (not saved as a regular app setting). Defaults
+    # to public: gittr has its own Nostr-based login (NIP-07/pubkey), not a
+    # YunoHost-account gate — matches `sso = false` / `ldap = false` above,
+    # and a git forge that visitors can't browse or clone from without a
+    # YunoHost account isn't very useful. See doc/DECISIONS.md item 14 for
+    # why this (and resources.permissions below) was missing entirely
+    # before — no tile, and the domain fell through to the SSO login page
+    # instead of the app.
+    type = "group"
+    default = "visitors"
+
     [install.nostr_relays]
     type = "string"
     ask.en = "Which Nostr relays should the bridge and UI use?"
@@ -56,6 +70,13 @@ ram.runtime = "512M"
     # doc/DECISIONS.md item 6.
 
 [resources]
+    [resources.permissions]
+        # Required explicitly — it is NOT automatic even though a "main"
+        # permission gets auto-created if this whole block is omitted (that
+        # default has url = None, i.e. no SSOwat rule and no tile at all).
+        # See doc/DECISIONS.md item 14.
+        main.url = "/"
+
     [resources.system_user]
     # Left at its default (/var/www/__APP__) deliberately: it must stay equal
     # to install_dir's own default below, since the bridge writes

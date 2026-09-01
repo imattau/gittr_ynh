@@ -531,3 +531,64 @@ another.
 Both fixes are consistent with the running theme of this document: guess
 at your own risk, but the real signal is what a live instance's logs
 actually say.
+
+## 14. No portal tile, and the domain fell through to the SSO login page
+
+All three services stayed up this time (items 9–13's fixes held) — this
+one surfaced by the user just visiting the site: the app's domain
+(`gittr.$domain`) redirected to `https://$maindomain/yunohost/sso/`
+instead of showing gittr, and that portal had no tile for the app at all.
+
+Root cause: **`manifest.toml` never declared `[resources.permissions]` or
+`[install.init_main_permission]`, at all.** I'd assumed — wrongly, and
+without checking — that a usable default permission gets auto-created the
+same way `system_user`/`install_dir` do. It partly does: `PermissionsResource.__init__`
+in YunoHost core does inject a `main` entry if the whole block is missing
+(`if "main" not in properties: properties["main"] = copy.copy(self.default_perm_properties)`).
+But that default has `url = None` and `allowed = None`. Two consequences,
+both observed:
+
+- `show_tile` defaults to `bool(properties[perm]["url"])` — with `url`
+  unset, that's `False`. No tile, exactly as reported.
+- With `allowed = None` (nobody) and no `url` to anchor a real SSOwat rule
+  at `$domain/$path`, there's no permission entry mapping the app's
+  domain/path to anything — so nginx/SSOwat's fallback for an unmatched
+  request is the portal login page. Matches "goes to
+  `.../yunohost/sso/`" exactly.
+
+Fixed by adding, matching the exact pattern in `YunoHost/example_ynh`'s
+own manifest (checked directly rather than assumed, given how many
+"obvious" assumptions in this document have turned out wrong):
+
+```toml
+[install.init_main_permission]
+type = "group"
+default = "visitors"
+
+[resources.permissions]
+main.url = "/"
+```
+
+`init_main_permission` is a **generic, reserved** install question name —
+YunoHost's core handles its `ask` string and its public/private semantics
+itself (`visitors` = public, `all_users` = any logged-in YunoHost user);
+it is *not* saved as a regular app setting, it seeds the `main`
+permission's initially-allowed group directly. Defaulted to `visitors`
+(public): gittr has its own Nostr-based login (NIP-07 / pubkey), not a
+YunoHost-account gate, consistent with `sso = false` / `ldap = false`
+already declared in `[integration]` — and a self-hosted git forge nobody
+can browse or clone from without first having a YunoHost account on that
+specific server isn't very useful. An admin who wants it gated to logged-in
+YunoHost users instead can flip this after install via `yunohost user
+permission update gittr.main --add all_users --remove visitors` or the
+webadmin's Permissions panel.
+
+This is a good one to flag as a category, not just an instance: it's the
+second time in this document (`[resources.database]` in the original
+sketch being the first) that "this whole resource block can just be
+omitted, defaults are fine" turned out to be true for the *provisioning*
+half of a resource but silently wrong for making the app *actually usable*
+once provisioned. Worth treating any manifest resource's documented
+defaults with the same "did I check what happens when I omit this
+entirely" skepticism as a helper call, not just the ones that fail loudly
+at install time.
