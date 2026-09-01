@@ -4,7 +4,7 @@ id = "gittr"
 name = "gittr"
 description.en = "Self-hosted git forge on Nostr (NIP-34), with the gitnostr bridge for SSH git access"
 
-version = "0.1~ynh7"
+version = "0.1~ynh8"
 
 maintainers = ["imattau"]
 
