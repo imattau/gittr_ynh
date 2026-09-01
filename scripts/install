@@ -84,6 +84,7 @@ chmod +x "$install_dir/bin/git-http-backend-quiet"
 ynh_config_add --template="systemd-fcgiwrap.socket" \
 	--destination="/etc/systemd/system/$app-fcgiwrap.socket"
 systemctl enable "$app-fcgiwrap.socket" --quiet
+systemctl daemon-reload
 
 ynh_script_progression "Configuring systemd services"
 ynh_config_add_systemd --service="$app-ui" --template="systemd-ui.service"
@@ -123,6 +124,6 @@ ynh_systemctl --service="$app-ui" --action="start" --log_path="systemd"
 ynh_systemctl --service="$app-ssh" --action="start" --log_path="systemd"
 # Socket-activated: start the .socket, not the .service — fcgiwrap.service
 # starts on-demand when nginx makes its first connection.
-systemctl start "$app-fcgiwrap.socket"
+systemctl restart "$app-fcgiwrap.socket"
 
 ynh_script_progression "Installation complete"

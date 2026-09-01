@@ -33,6 +33,7 @@ ynh_config_add_systemd --service="$app-ssh" --template="systemd-ssh.service"
 ynh_config_add --template="systemd-fcgiwrap.socket" \
 	--destination="/etc/systemd/system/$app-fcgiwrap.socket"
 systemctl enable "$app-fcgiwrap.socket" --quiet
+systemctl daemon-reload
 ynh_config_add_systemd --service="$app-fcgiwrap" --template="systemd-fcgiwrap.service"
 
 ynh_script_progression "Starting services"
@@ -42,6 +43,6 @@ yunohost service add "$app-fcgiwrap" --description="dedicated fcgiwrap for HTTPS
 ynh_systemctl --service="$app-bridge" --action="start" --log_path="systemd"
 ynh_systemctl --service="$app-ui" --action="start" --log_path="systemd"
 ynh_systemctl --service="$app-ssh" --action="start" --log_path="systemd"
-systemctl start "$app-fcgiwrap.socket"
+systemctl restart "$app-fcgiwrap.socket"
 
 ynh_script_progression "Restore complete"

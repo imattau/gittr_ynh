@@ -924,3 +924,67 @@ family being reliable at all:
 Not yet confirmed this specific fix works live — asked the user to
 upgrade and re-tested from here, same as items 13–18, rather than
 declaring it fixed on reasoning alone.
+
+## 20. Item 19's fix was never actually applied — `scripts/upgrade` never restarted the socket
+
+Re-tested after the user upgraded to the item 19 fix: still a 502. Before
+guessing at the socket permissions *again*, asked for the same
+diagnostics as before and compared them against the very first check
+several fixes ago:
+
+```
+$ systemctl status gittr-fcgiwrap.socket
+Active: active (listening) since Tue 2026-09-01 20:34:13 AEST; 12min ago
+$ ls -la /var/www/gittr/fcgiwrap.sock
+srw-r----- 1 gittr gittr 0 Sep  1 20:34 /var/www/gittr/fcgiwrap.sock
+```
+
+**The timestamp `20:34:13` is identical to the very first diagnostic
+check, from before item 19's fix even existed.** The socket had never
+been recreated — not by the upgrade to item 19's fix, not by anything.
+Every fix pushed since the original v0.1.9 install had been sitting in
+the packaging repo and in the deployed unit *file*, completely unapplied
+to the actual running socket.
+
+Root cause, once looked for directly instead of assuming the fix content
+was wrong again: `scripts/upgrade` rewrites `/etc/systemd/system/
+$app-fcgiwrap.socket` via `ynh_config_add` and calls `systemctl enable`
+— but **rewriting a unit file on disk does not make an already-running
+unit re-read it.** `.service` units in this package don't hit this
+problem because they're explicitly stopped at the top of the script
+(`ynh_systemctl --action=stop`) before their config is rewritten, so the
+later `--action=start` naturally starts them fresh under the new config.
+`.socket` units are different: `$app-fcgiwrap.service` (which *was*
+being stopped) is a *separate* unit from `$app-fcgiwrap.socket` (which
+was never touched) — stopping the on-demand service has no effect on the
+socket that triggers it. The socket had been listening continuously,
+under whatever config it started with at v0.1.9's original install, the
+whole time.
+
+This also means **item 19's actual fix (`SocketMode=0666` +
+`ExecStartPost=` chmod) was never live-tested** — nor, in retrospect,
+was item 19's diagnosis of item 17's original `SocketUser=`/
+`SocketGroup=` fully trustworthy, since *that* socket may equally have
+been stale from an earlier state rather than a true reflection of those
+directives failing. Not going back to re-litigate that — the fix in item
+19 doesn't depend on `SocketUser=`/`SocketGroup=` working either way, so
+it doesn't matter *why* they appeared not to for this to still be the
+right fix; it matters that it actually gets applied now.
+
+Fixed by adding an explicit `systemctl daemon-reload` right after
+writing the socket unit file (rather than relying on the incidental
+`daemon-reload` inside `ynh_config_add_systemd`'s later call for
+`$app-fcgiwrap.service`, which happened to cover this but shouldn't be
+depended on implicitly) and changing the final `systemctl start
+"$app-fcgiwrap.socket"` to `systemctl restart` in `scripts/install`,
+`scripts/upgrade`, and `scripts/restore` — `restart` forces the socket
+to actually tear down and recreate under the current unit file content
+regardless of whether it was already active; `start` on an already-
+active unit is a complete no-op.
+
+Lesson: when a fix doesn't take effect on a live retest, check whether
+the fix was actually *applied* before revising the fix's own content
+again. The diagnostic evidence for that was sitting right there in the
+first re-test's output (an unchanged timestamp) and was available to
+compare against immediately — didn't need to ask for anything new to
+catch this, just needed to look at what was already provided.

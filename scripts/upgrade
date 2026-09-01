@@ -68,6 +68,14 @@ chmod +x "$install_dir/bin/git-http-backend-quiet"
 ynh_config_add --template="systemd-fcgiwrap.socket" \
 	--destination="/etc/systemd/system/$app-fcgiwrap.socket"
 systemctl enable "$app-fcgiwrap.socket" --quiet
+# Rewriting the unit file on disk does NOT make an already-running .socket
+# unit pick up the new content — unlike .service units (stopped at the top
+# of this script, so a plain "start" later naturally re-reads them),
+# .socket was never stopped, so it would otherwise keep running under
+# whatever config it started with at install time indefinitely, silently
+# ignoring every change here. Explicit daemon-reload + restart (not
+# start) below. See doc/DECISIONS.md item 20.
+systemctl daemon-reload
 
 ynh_script_progression "Updating systemd configuration"
 ynh_config_add_systemd --service="$app-ui" --template="systemd-ui.service"
@@ -92,6 +100,6 @@ yunohost service add "$app-fcgiwrap" --description="dedicated fcgiwrap for HTTPS
 ynh_systemctl --service="$app-bridge" --action="start" --log_path="systemd"
 ynh_systemctl --service="$app-ui" --action="start" --log_path="systemd"
 ynh_systemctl --service="$app-ssh" --action="start" --log_path="systemd"
-systemctl start "$app-fcgiwrap.socket"
+systemctl restart "$app-fcgiwrap.socket"
 
 ynh_script_progression "Upgrade complete"
