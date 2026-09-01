@@ -93,6 +93,15 @@ chmod 600 "$ssh_host_key_dir/ssh_host_ed25519_key" "$ssh_host_key_dir/sshd_confi
 chmod 600 "$install_dir/$bridge_config_dir/$bridge_config_file"
 chmod 600 "$install_dir/ui/.env.runtime"
 
+ynh_script_progression "Setting the portal tile logo"
+# A logo.png sitting in the package repo does nothing on its own — YunoHost
+# doesn't auto-copy arbitrary packaging-repo files anywhere, and this
+# packaging repo isn't what ynh_setup_source pulls (that's upstream's own
+# gittr tarball). Has to be applied explicitly via the permission's --logo
+# flag, using $YNH_APP_BASEDIR (the checkout of *this* packaging repo, not
+# $install_dir). See doc/DECISIONS.md item 16.
+yunohost user permission update "$app.main" --logo "$YNH_APP_BASEDIR/logo.png"
+
 ynh_script_progression "Enabling and starting services"
 yunohost service add "$app-bridge" --description="gitnostr bridge (repo/SSH-key sync from Nostr)" --log="/var/log/$app/bridge.log"
 yunohost service add "$app-ssh" --description="dedicated sshd for git-nostr-ssh"
