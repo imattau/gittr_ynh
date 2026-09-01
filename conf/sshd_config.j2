@@ -1,0 +1,34 @@
+# Dedicated sshd instance for git-nostr-ssh, entirely separate from the
+# server's admin sshd (port 22, /etc/ssh/sshd_config). This instance runs
+# as the unprivileged __APP__ user and only ever authenticates as that same
+# user, so it never needs root/setuid — see doc/DECISIONS.md item 3.
+#
+# git-nostr-ssh itself is not a network listener: the bridge writes
+# per-key `command="git-nostr-ssh <pubkey>" ...` restrictions directly into
+# __INSTALL_DIR__/.ssh/authorized_keys, and sshd invokes it as a forced
+# command on each connection.
+
+Port __PORT_GIT_SSH__
+ListenAddress 0.0.0.0
+Protocol 2
+
+HostKey __INSTALL_DIR__/ssh/ssh_host_ed25519_key
+PidFile __INSTALL_DIR__/ssh/sshd.pid
+
+AuthorizedKeysFile __INSTALL_DIR__/.ssh/authorized_keys
+AllowUsers __APP__
+
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+PermitUserEnvironment yes
+UsePAM no
+X11Forwarding no
+AllowTcpForwarding no
+AllowAgentForwarding no
+PermitTTY no
+
+Subsystem sftp /bin/false
+
+LogLevel INFO

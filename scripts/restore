@@ -4,26 +4,38 @@ source _common.sh
 source /usr/share/yunohost/helpers
 
 ynh_script_progression "Restoring the app main directory"
-ynh_restore_file --origin_path="$install_dir"
-
-ynh_script_progression "Recreating the dedicated system user"
-ynh_system_user_create --username="$app" --home_dir="$install_dir"
+ynh_restore "$install_dir"
 chown -R "$app:$app" "$install_dir"
+chmod 700 "$install_dir/.ssh" "$install_dir/ssh"
+chmod 600 "$install_dir/ssh/ssh_host_ed25519_key" "$install_dir/ssh/sshd_config"
+chmod 600 "$install_dir/$bridge_config_dir/$bridge_config_file"
+
+ynh_script_progression "Reinstalling the Go and Node.js toolchains"
+# goenv/n install shared toolchains outside install_dir, so they aren't part
+# of the app's own backup archive and need to be re-provisioned here —
+# BEFORE regenerating the systemd units below, since those bake in an
+# absolute path to the go/node binary that ynh_install_go/ynh_install_nodejs
+# may have just changed (e.g. restoring onto a fresh server).
+ynh_install_go --go_version=$GO_VERSION
+ynh_use_go
+ynh_install_nodejs --nodejs_version=$NODEJS_VERSION
+ynh_use_nodejs
 
 ynh_script_progression "Restoring NGINX configuration"
-ynh_restore_file --origin_path="/etc/nginx/conf.d/$domain.d/$app.conf"
+ynh_restore "/etc/nginx/conf.d/$domain.d/$app.conf"
 
-ynh_script_progression "Restoring systemd configuration"
-ynh_restore_file --origin_path="/etc/systemd/system/$app-ui.service"
-ynh_restore_file --origin_path="/etc/systemd/system/$app-bridge.service"
-systemctl enable "$app-ui.service" "$app-bridge.service" --quiet
-
-ynh_script_progression "Reinstalling Node.js"
-ynh_install_nodejs --nodejs_version=$NODEJS_VERSION
+ynh_script_progression "Regenerating systemd configuration"
+# Regenerated from templates rather than ynh_restore'd verbatim, for the
+# node/go absolute-path reason above.
+ynh_add_systemd_config --service="$app-ui" --template="systemd-ui.service"
+ynh_add_systemd_config --service="$app-bridge" --template="systemd-bridge.service"
+ynh_add_systemd_config --service="$app-ssh" --template="systemd-ssh.service"
 
 ynh_script_progression "Starting services"
-yunohost service add "$app-bridge" --description="gitnostr bridge (git SSH/HTTPS)" --log="/var/log/$app/bridge.log"
+yunohost service add "$app-bridge" --description="gitnostr bridge (repo/SSH-key sync from Nostr)" --log="/var/log/$app/bridge.log"
+yunohost service add "$app-ssh" --description="dedicated sshd for git-nostr-ssh"
 ynh_systemd_action --service_name="$app-bridge" --action="start" --log_path="systemd"
 ynh_systemd_action --service_name="$app-ui" --action="start" --log_path="systemd"
+ynh_systemd_action --service_name="$app-ssh" --action="start" --log_path="systemd"
 
 ynh_script_progression "Restore complete"

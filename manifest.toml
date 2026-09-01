@@ -2,7 +2,7 @@ packaging_format = 2
 
 id = "gittr"
 name = "gittr"
-description.en = "Self-hosted git forge on Nostr (NIP-34), with the gitnostr bridge for SSH/HTTPS git access"
+description.en = "Self-hosted git forge on Nostr (NIP-34), with the gitnostr bridge for SSH git access"
 
 version = "0.1~ynh1"
 
@@ -34,11 +34,6 @@ ram.runtime = "512M"
     [install.admin]
     type = "user"
 
-    [install.git_ssh_port]
-    type = "number"
-    default = 2225
-    help.en = "Port for git-nostr-ssh, kept separate from the server's admin SSH (22)."
-
     [install.nostr_relays]
     type = "string"
     default = "wss://relay.damus.io,wss://nos.lol"
@@ -46,19 +41,45 @@ ram.runtime = "512M"
 
     [install.repo_owner_pubkey]
     type = "string"
-    help.en = "Hex nostr pubkey allowed to own/create repos on this bridge."
+    optional = true
+    help.en = "Hex nostr pubkey allowed to own/create repos on this bridge. Leave blank to watch all authors (upstream's default 'public GRASP' mode) — see doc/DECISIONS.md item 2."
 
 [resources]
     [resources.system_user]
+    # Left at its default (/var/www/__APP__) deliberately: it must stay equal
+    # to install_dir's own default below, since the bridge writes
+    # ~/.ssh/authorized_keys relative to $HOME=$install_dir (see
+    # conf/systemd-bridge.service and doc/DECISIONS.md item 3). If either
+    # path is ever customized, the other must be customized to match.
 
     [resources.install_dir]
 
     [resources.ports]
+        # "main" is implicit (-> $port) and used only for the internal
+        # nginx<->Next.js reverse proxy — left unexposed.
+        #
+        # git_ssh -> $port_git_ssh: the dedicated sshd instance that runs
+        # git-nostr-ssh as a forced command, kept separate from the server's
+        # admin SSH (22). git-nostr-ssh has no listener of its own — see
+        # doc/DECISIONS.md item 3. `fixed` is left false so install doesn't
+        # hard-fail if 2225 is already taken; check `yunohost app show gittr`
+        # for the port actually picked.
         [resources.ports.git_ssh]
         default = 2225
+        exposed = "TCP"
 
     [resources.apt]
-        packages = "git, build-essential, sqlite3"
+        # No build-essential: the bridge builds with CGO_ENABLED=0, no gcc needed.
+        # openssh-server provides the sshd binary the dedicated git-ssh instance runs.
+        packages = "git, sqlite3, openssh-server"
 
-    [resources.database]
-        # not used — bridge uses sqlite on disk, no MySQL/Postgres needed
+    # No [resources.database]: a `type` (mysql/postgresql) is mandatory for
+    # that resource, and it would provision a DB we'd never use — the bridge
+    # stores everything in its own sqlite file under $install_dir/data/.
+
+    [resources.sources]
+        [resources.sources.main]
+        # Pinned to the v0.2.6 tag (latest as of 2026-09-01) rather than `main`
+        # — see doc/DECISIONS.md item 1. Re-verify and re-checksum on every bump.
+        url = "https://github.com/arbadacarbaYK/gittr/archive/refs/tags/v0.2.6.tar.gz"
+        sha256 = "d2027d291837e8c8b052875855c285caa3501cfc6b587c6994f06bd3b19a3aa0"

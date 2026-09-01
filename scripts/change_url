@@ -9,6 +9,17 @@ ynh_systemd_action --service_name="$app-ui" --action="stop" --log_path="systemd"
 ynh_script_progression "Updating NGINX configuration"
 ynh_change_url_nginx_config
 
+ynh_script_progression "Rebuilding the UI for the new domain"
+# NEXT_PUBLIC_DOMAIN / SITE_URL / GIT_SSH_BASE / GIT_SERVER_URL are inlined
+# into the client bundle at build time (see conf/ui.env.j2) — a plain
+# systemd restart is not enough after a domain change, the UI must rebuild.
+ynh_use_nodejs
+ynh_add_config --template="ui.env.j2" \
+	--destination="$install_dir/ui/.env.production.local"
+pushd "$install_dir/ui"
+	ynh_exec_warn_less yarn build
+popd
+
 ynh_script_progression "Updating systemd configuration"
 ynh_add_systemd_config --service="$app-ui" --template="systemd-ui.service"
 

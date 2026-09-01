@@ -4,47 +4,78 @@ source _common.sh
 source /usr/share/yunohost/helpers
 
 ynh_script_progression "Validating installation parameters"
-# domain, path, admin, git_ssh_port, nostr_relays, repo_owner_pubkey
-# are already resolved into env vars by the resource system
+# domain, path, admin, nostr_relays, repo_owner_pubkey are resolved into env
+# vars by the resource system, as is $port_git_ssh (resources.ports.git_ssh)
 
 ynh_script_progression "Setting up source files"
 ynh_setup_source --dest_dir="$install_dir"
 
 ynh_script_progression "Installing Go toolchain (pinned)"
-ynh_setup_source --source_id="go" --dest_dir="$install_dir/.go"
+ynh_install_go --go_version=$GO_VERSION
+ynh_use_go
 
 ynh_script_progression "Building git-nostr-bridge"
-pushd "$install_dir/ui/gitnostr"
-	PATH="$install_dir/.go/bin:$PATH" make git-nostr-bridge git-nostr-ssh git-nostr-cli
+# `make git-nostr-bridge` builds both bin/git-nostr-bridge and bin/git-nostr-ssh
+# in one target; there is no separate git-nostr-ssh make target.
+pushd "$install_dir/$bridge_dir"
+	make git-nostr-bridge
 popd
 
-ynh_script_progression "Installing Node and building the UI"
+ynh_script_progression "Installing Node.js and yarn"
 ynh_exec_warn_less ynh_install_nodejs --nodejs_version=$NODEJS_VERSION
+ynh_use_nodejs
+
+ynh_script_progression "Writing UI build-time config"
+# NEXT_PUBLIC_* vars are inlined into the client bundle at build time, so
+# this must exist before `yarn build` runs — see conf/ui.env.j2.
+ynh_add_config --template="ui.env.j2" \
+	--destination="$install_dir/ui/.env.production.local"
+
+ynh_script_progression "Building the UI"
 pushd "$install_dir/ui"
-	ynh_use_nodejs
-	ynh_exec_warn_less npm ci
-	ynh_exec_warn_less npm run build
+	corepack enable
+	corepack prepare yarn@stable --activate
+	ynh_exec_warn_less yarn install --frozen-lockfile
+	ynh_exec_warn_less yarn build
 popd
 
 ynh_script_progression "Writing bridge config"
+mkdir -p "$install_dir/$bridge_config_dir" "$install_dir/$repositories_dir" "$install_dir/data"
+nostr_relays_json_array=$(csv_to_json_array "$nostr_relays")
+git_repo_owners_json_array=$(csv_to_json_array "$repo_owner_pubkey")
 ynh_add_config --template="bridge-config.json.j2" \
-	--destination="$install_dir/ui/gitnostr/config.json"
+	--destination="$install_dir/$bridge_config_dir/$bridge_config_file"
+
+ynh_script_progression "Setting up dedicated SSH access for git-nostr-ssh"
+ssh_host_key_dir="$install_dir/ssh"
+mkdir -p "$ssh_host_key_dir"
+ssh-keygen -q -t ed25519 -N "" -f "$ssh_host_key_dir/ssh_host_ed25519_key"
+ynh_add_config --template="sshd_config.j2" \
+	--destination="$ssh_host_key_dir/sshd_config"
 
 ynh_script_progression "Configuring systemd services"
 ynh_add_systemd_config --service="$app-ui" --template="systemd-ui.service"
 ynh_add_systemd_config --service="$app-bridge" --template="systemd-bridge.service"
+ynh_add_systemd_config --service="$app-ssh" --template="systemd-ssh.service"
 
 ynh_script_progression "Configuring NGINX"
 ynh_add_nginx_config
 
 ynh_script_progression "Setting permissions"
+# The bridge runs with HOME=$install_dir (see systemd-bridge.service) and
+# writes authorized_keys to $HOME/.ssh — NOT /home/$app/.ssh.
+mkdir -p "$install_dir/.ssh"
 chown -R "$app:$app" "$install_dir"
-# lock down authorized_keys handling per upstream warning
-chmod 700 "/home/$app/.ssh" 2>/dev/null || true
+chmod 700 "$install_dir/.ssh"
+chmod 700 "$ssh_host_key_dir"
+chmod 600 "$ssh_host_key_dir/ssh_host_ed25519_key" "$ssh_host_key_dir/sshd_config"
+chmod 600 "$install_dir/$bridge_config_dir/$bridge_config_file"
 
 ynh_script_progression "Enabling and starting services"
-yunohost service add "$app-bridge" --description="gitnostr bridge (git SSH/HTTPS)" --log="/var/log/$app/bridge.log"
+yunohost service add "$app-bridge" --description="gitnostr bridge (repo/SSH-key sync from Nostr)" --log="/var/log/$app/bridge.log"
+yunohost service add "$app-ssh" --description="dedicated sshd for git-nostr-ssh"
 ynh_systemd_action --service_name="$app-bridge" --action="start" --log_path="systemd"
 ynh_systemd_action --service_name="$app-ui" --action="start" --log_path="systemd"
+ynh_systemd_action --service_name="$app-ssh" --action="start" --log_path="systemd"
 
 ynh_script_progression "Installation complete"

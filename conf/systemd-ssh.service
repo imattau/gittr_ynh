@@ -1,0 +1,14 @@
+[Unit]
+Description=gittr — dedicated sshd for git-nostr-ssh
+After=network.target
+
+[Service]
+Type=simple
+User=__APP__
+Group=__APP__
+ExecStart=/usr/sbin/sshd -D -e -f __INSTALL_DIR__/ssh/sshd_config
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

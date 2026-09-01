@@ -10,7 +10,14 @@ WorkingDirectory=__INSTALL_DIR__/ui/gitnostr
 ExecStart=__INSTALL_DIR__/ui/gitnostr/bin/git-nostr-bridge
 Restart=on-failure
 RestartSec=5
+# HOME must equal install_dir's path (see manifest.toml's system_user note):
+# the bridge writes ~/.ssh/authorized_keys and reads ~/.config/git-nostr/.
 Environment=HOME=__INSTALL_DIR__
+# The bridge always starts an HTTP listener (default :8080, unauthenticated
+# /api/event) regardless of this variable being set — there is no way to
+# disable it. It is left bound to the default 0.0.0.0:8080 but NOT declared
+# as a resources.ports entry, so YunoHost's firewall keeps it closed from
+# the outside by default. See doc/DECISIONS.md item 3.
 
 [Install]
 WantedBy=multi-user.target

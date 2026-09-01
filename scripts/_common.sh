@@ -1,10 +1,40 @@
 #!/bin/bash
 
 # Pinned versions — bump deliberately, verify against upstream before changing.
-GO_VERSION="1.21.6"
+#
+# go.mod (ui/gitnostr/go.mod) requires go >= 1.25.0. "1.25" resolves to the
+# latest 1.25.x patch via ynh_install_go's goenv-latest plugin.
+GO_VERSION="1.25"
 NODEJS_VERSION=20
 
-# Pin upstream to a known-good ref rather than tracking a moving `main`.
-# TODO: verify this ref still exists / is still the intended target before
-# any real install runs against it.
-GITTR_REF="main"
+# The upstream tag itself is pinned via manifest.toml's
+# [resources.sources.main] url/sha256 (see doc/DECISIONS.md item 1) —
+# not here, so upgrading the pin means editing the manifest, not this file.
+
+# Paths, relative to $install_dir, used by more than one script.
+bridge_dir="ui/gitnostr"
+bridge_config_dir=".config/git-nostr"
+bridge_config_file="git-nostr-bridge.json"
+repositories_dir="repositories"
+
+# Turns a comma-separated list into a JSON array of strings, e.g.
+# "a,b" -> "\"a\",\"b\"". Used to fill __NOSTR_RELAYS_JSON_ARRAY__ and
+# __GIT_REPO_OWNERS_JSON_ARRAY__ in bridge-config.json.j2. An empty input
+# produces an empty (not single-blank-string) array — important since an
+# empty gitRepoOwners means upstream's "watch all authors" mode, not a
+# filter matching nothing (see doc/DECISIONS.md item 2).
+csv_to_json_array() {
+	local csv="$1"
+	[ -z "$csv" ] && return 0
+	local IFS=','
+	local -a items=($csv)
+	local out=""
+	for item in "${items[@]}"; do
+		item="${item## }"
+		item="${item%% }"
+		[ -z "$item" ] && continue
+		[ -n "$out" ] && out+=","
+		out+="\"$item\""
+	done
+	echo -n "$out"
+}

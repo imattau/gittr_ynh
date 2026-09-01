@@ -8,11 +8,18 @@ Type=simple
 User=__APP__
 Group=__APP__
 WorkingDirectory=__INSTALL_DIR__/ui
-ExecStart=/usr/bin/node __INSTALL_DIR__/ui/node_modules/.bin/next start -p __PORT__
+ExecStart=__YNH_NODE__ node_modules/.bin/next start -p __PORT__
 Restart=on-failure
 RestartSec=5
-Environment=NEXT_PUBLIC_API_URL=https://__DOMAIN__
-Environment=NEXT_PUBLIC_NOSTR_RELAYS=__NOSTR_RELAYS__
+# NEXT_PUBLIC_* vars are NOT set here — Next.js inlines them into the client
+# bundle at `yarn build` time (see conf/ui.env.j2), not at process start.
+# Next.js runs as the same __APP__ user/HOME as the bridge, so its default
+# path resolution (checks /home/git-nostr/... first, then $HOME/...) would
+# already fall through to the right place — but that first hardcoded check
+# assumes a user literally named git-nostr, which ours isn't. Set these
+# explicitly rather than rely on that fallback. See doc/DECISIONS.md item 3.
+Environment=GIT_NOSTR_BRIDGE_DB=__INSTALL_DIR__/data/git-nostr-db.sqlite
+Environment=GIT_NOSTR_BRIDGE_REPOS_DIR=__INSTALL_DIR__/repositories
 
 [Install]
 WantedBy=multi-user.target
