@@ -13,7 +13,8 @@ ynh_script_progression "Rebuilding the UI for the new domain"
 # NEXT_PUBLIC_DOMAIN / SITE_URL / GIT_SSH_BASE / GIT_SERVER_URL are inlined
 # into the client bundle at build time (see conf/ui.env.j2) — a plain
 # systemd restart is not enough after a domain change, the UI must rebuild.
-ynh_use_nodejs
+# Node.js is a manifest resource, already on $PATH from sourcing the
+# helpers above (see doc/DECISIONS.md item 9).
 ynh_add_config --template="ui.env.j2" \
 	--destination="$install_dir/ui/.env.production.local"
 # GITHUB_REDIRECT_URI is domain-dependent too (server-only, so no rebuild

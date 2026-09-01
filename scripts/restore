@@ -13,23 +13,17 @@ chmod 600 "$install_dir/ssh/ssh_host_ed25519_key" "$install_dir/ssh/sshd_config"
 chmod 600 "$install_dir/$bridge_config_dir/$bridge_config_file"
 chmod 600 "$install_dir/ui/.env.runtime"
 
-ynh_script_progression "Reinstalling the Go and Node.js toolchains"
-# goenv/n install shared toolchains outside install_dir, so they aren't part
-# of the app's own backup archive and need to be re-provisioned here —
-# BEFORE regenerating the systemd units below, since those bake in an
-# absolute path to the go/node binary that ynh_install_go/ynh_install_nodejs
-# may have just changed (e.g. restoring onto a fresh server).
-ynh_install_go --go_version=$GO_VERSION
-ynh_use_go
-ynh_install_nodejs --nodejs_version=$NODEJS_VERSION
-ynh_use_nodejs
-
 ynh_script_progression "Restoring NGINX configuration"
 ynh_restore "/etc/nginx/conf.d/$domain.d/$app.conf"
 
 ynh_script_progression "Regenerating systemd configuration"
-# Regenerated from templates rather than ynh_restore'd verbatim, for the
-# node/go absolute-path reason above.
+# Regenerated from templates rather than ynh_restore'd verbatim: they bake
+# in an absolute path to the go/node binary ($go_dir / $nodejs_dir), and
+# while the resources.go/resources.nodejs manifest resources are
+# reprovisioned automatically before this script runs (same as apt,
+# system_user, etc. — see doc/DECISIONS.md item 9), that path could still
+# differ from what a stale backed-up unit file has (e.g. restoring onto a
+# fresh server).
 ynh_add_systemd_config --service="$app-ui" --template="systemd-ui.service"
 ynh_add_systemd_config --service="$app-bridge" --template="systemd-bridge.service"
 ynh_add_systemd_config --service="$app-ssh" --template="systemd-ssh.service"

@@ -1,12 +1,10 @@
 #!/bin/bash
 
-# Pinned versions — bump deliberately, verify against upstream before changing.
+# Go and Node.js versions are NOT set here — they're declared as manifest
+# resources (`[resources.go]` / `[resources.nodejs]`) and provisioned
+# automatically; sourcing the helpers puts `go`/`node`/`npm` on $PATH with
+# no scripted install call needed. See doc/DECISIONS.md item 9.
 #
-# go.mod (ui/gitnostr/go.mod) requires go >= 1.25.0. "1.25" resolves to the
-# latest 1.25.x patch via ynh_install_go's goenv-latest plugin.
-GO_VERSION="1.25"
-NODEJS_VERSION=20
-
 # The upstream tag itself is pinned via manifest.toml's
 # [resources.sources.main] url/sha256 (see doc/DECISIONS.md item 1) —
 # not here, so upgrading the pin means editing the manifest, not this file.

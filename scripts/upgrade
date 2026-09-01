@@ -15,8 +15,8 @@ ynh_setup_source --dest_dir="$install_dir" \
 	--keep="$bridge_config_dir data repositories ssh .ssh"
 
 ynh_script_progression "Rebuilding git-nostr-bridge"
-ynh_install_go --go_version=$GO_VERSION
-ynh_use_go
+# Go is a manifest resource, already on $PATH from sourcing the helpers
+# above — see doc/DECISIONS.md item 9.
 pushd "$install_dir/$bridge_dir"
 	make git-nostr-bridge
 popd
@@ -30,8 +30,7 @@ blossom_url="${blossom_url:-$DEFAULT_BLOSSOM_URL}"
 ynh_app_setting_set --app=$app --key=blossom_url --value="$blossom_url"
 
 ynh_script_progression "Rebuilding the UI"
-ynh_install_nodejs --nodejs_version=$NODEJS_VERSION
-ynh_use_nodejs
+# Node.js is likewise a manifest resource, already on $PATH.
 ynh_add_config --template="ui.env.j2" \
 	--destination="$install_dir/ui/.env.production.local"
 ynh_add_config --template="ui-runtime.env.j2" \

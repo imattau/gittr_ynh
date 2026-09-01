@@ -25,7 +25,8 @@ rewrite_bridge_config() {
 
 rebuild_ui() {
 	ynh_script_progression "Rebuilding the UI (this can take a minute or two)"
-	ynh_use_nodejs
+	# Node.js is a manifest resource, already on $PATH — see doc/DECISIONS.md
+	# item 9.
 	ynh_add_config --template="ui.env.j2" \
 		--destination="$install_dir/ui/.env.production.local"
 	pushd "$install_dir/ui"

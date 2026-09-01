@@ -123,8 +123,13 @@ package can silently fix without patching the UI's clone-URL builder.
 Confirmed `ynh_install_go` / `ynh_use_go` / `ynh_remove_go` exist as real
 YunoHost core helpers (`helpers/helpers.v1.d/go`), goenv-based, same pattern
 as `ynh_install_nodejs`. Used those instead of hand-vendoring a Go tarball.
-`go.mod` requires `go 1.25.0`; `GO_VERSION="1.25"` in `_common.sh` resolves
-to the latest 1.25.x patch via goenv's `xxenv-latest` plugin.
+`go.mod` requires `go 1.25.0`.
+
+**Correction (item 9): this was the wrong API.** `helpers.v1.d/go` is the
+legacy v1 helper set; this package declares `helpers_version = "2.1"`,
+which sources `helpers.v2.1.d/go` instead — a completely different,
+resource-based API. See item 9 for the real fix (this caused the first
+actual install attempt to fail outright).
 
 Also corrected: the Makefile's `git-nostr-bridge` target builds **both**
 `bin/git-nostr-bridge` and `bin/git-nostr-ssh` — there's no separate
@@ -275,3 +280,77 @@ features most installs won't touch).
 them across five new setters.
 
 Re-ran `package_linter` after adding all of this — no new findings.
+
+## 9. Go/Node.js: fixed for real (v2.1 helpers use a resource-based API)
+
+The first actual install attempt against a real YunoHost instance
+(12.1.40.1) failed immediately:
+
+```
++ ynh_install_go --go_version=1.25
+./install: line 14: ynh_install_go: command not found
+```
+
+Root cause: `ynh_install_go`/`ynh_use_go`/`ynh_remove_go` (and the
+equivalent nodejs trio) are the **v1** helper API
+(`helpers/helpers.v1.d/go`), which I'd fetched and used without checking
+whether the **v2.1** set — which is what this package's own
+`helpers_version = "2.1"` actually sources — kept the same function names.
+It doesn't. `package_linter` never caught this because it only checks that
+*used* helper names are known and version-compatible, not that a
+*declared* `helpers_version` and the helper calls in the scripts actually
+agree on which API generation to use — a linter gap, not something to
+blame on the tool.
+
+`helpers.v2.1.d/go` and `helpers.v2.1.d/nodejs` redesigned both as
+**manifest resources**, matching how `system_user`/`install_dir`/`ports`/
+`apt` already work in packaging_format 2 — provisioned automatically by
+the resource system, not invoked from scripts at all:
+
+```toml
+[resources.go]
+version = "1.25"
+
+[resources.nodejs]
+version = "20"
+```
+
+Sourcing `/usr/share/yunohost/helpers` (already the first line of every
+script) then **automatically** puts `go`/`make`/`node`/`npm` on `$PATH` —
+confirmed by reading the actual source: each helper file runs
+`if [ -n "${go_version:-}" ] && (manifest has resources.go); then
+_ynh_load_go_in_path_and_other_tweaks; fi` as top-level code the moment
+it's sourced, not inside a function you have to call. `$go_version` /
+`$nodejs_version` are ambient (auto-loaded app settings, same mechanism as
+`$domain`), so this fires correctly in every script once the resource has
+been provisioned once at install.
+
+Consequences, fixed across the board:
+
+- `scripts/install`, `scripts/upgrade`, `scripts/change_url`,
+  `scripts/config`: removed every `ynh_install_go`/`ynh_use_go`/
+  `ynh_install_nodejs`/`ynh_use_nodejs` call. `make`/`corepack`/`yarn` are
+  just called directly now.
+- `scripts/restore`: removed the explicit toolchain-reinstall block
+  entirely — resource reprovisioning (including `resources.go`/
+  `resources.nodejs`) happens automatically before `scripts/restore` runs,
+  same as `apt`/`system_user` always did. Kept regenerating the systemd
+  units from templates rather than trusting a raw restored copy, since
+  `$go_dir`/`$nodejs_dir` are still absolute paths that *could* differ
+  after a restore onto different hardware.
+- `scripts/remove`: removed `ynh_remove_nodejs`/`ynh_remove_go` (also the
+  wrong v1 names, would have failed the same way on an actual removal) —
+  resource deprovisioning is automatic here too.
+- `conf/systemd-ui.service`: `ExecStart` used `__YNH_NODE__` (the v1
+  helper's `$ynh_node` variable, which no longer exists). Replaced with
+  `__NODEJS_DIR__/node` (`$nodejs_dir`), taken directly from the v2.1
+  helper's own docstring example.
+
+Lesson applied elsewhere in this file: every other "confirmed via actual
+source" claim in this document (`ynh_setup_source`'s `--keep`, the ports
+resource, `ynh_restore` vs `ynh_restore_file`, etc.) was checked against
+`helpers.v2.1.d/*` specifically, not `v1.d`. This one slipped through
+because the v1 and v2.1 function *names* looked equally plausible and I
+didn't cross-check the file that actually gets sourced for this
+`helpers_version`. Not proud of it, but better to record the miss
+precisely than bury it.

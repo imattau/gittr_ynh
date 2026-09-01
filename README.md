@@ -39,8 +39,9 @@ implementation:
   runs a second, dedicated `sshd` instance for that, rather than touching
   the server's admin SSH config. HTTPS smart-git (`git-http-backend` +
   `fcgiwrap` + nginx `auth_request`) is out of scope for now.
-- **Go and Node.js are installed via YunoHost's own `ynh_install_go` /
-  `ynh_install_nodejs` helpers**, not hand-vendored.
+- **Go and Node.js are declared as manifest resources** (`resources.go`,
+  `resources.nodejs`) and provisioned by YunoHost's own resource system,
+  not hand-vendored or scripted via helper calls.
 - **The UI is rebuilt whenever the domain changes** (`scripts/change_url`),
   because Next.js inlines `NEXT_PUBLIC_*` env vars into the client bundle
   at build time, not at process start.

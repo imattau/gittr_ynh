@@ -16,8 +16,8 @@ ynh_remove_nginx_config
 ynh_script_progression "Removing app main directory"
 ynh_secure_remove --file="$install_dir"
 
-ynh_script_progression "Removing dependencies"
-ynh_remove_nodejs
-ynh_remove_go
+# No explicit Go/Node.js/apt removal here — resources.go, resources.nodejs,
+# and resources.apt are deprovisioned automatically as part of the standard
+# app-removal resource lifecycle. See doc/DECISIONS.md item 9.
 
 ynh_script_progression "Removal complete"

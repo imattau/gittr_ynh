@@ -84,6 +84,21 @@ ram.runtime = "512M"
         # openssh-server provides the sshd binary the dedicated git-ssh instance runs.
         packages = "git, sqlite3, openssh-server"
 
+    [resources.go]
+        # helpers 2.1 provisions Go as a resource, not via a scripted
+        # ynh_install_go call (that's the removed v1 API — see
+        # doc/DECISIONS.md item 9). Sourcing the helpers auto-adds `go` to
+        # $PATH in every script once this is provisioned; scripts/install
+        # and scripts/upgrade just call `make` directly.
+        # go.mod requires go >= 1.25.0.
+        version = "1.25"
+
+    [resources.nodejs]
+        # Same deal as resources.go above — auto-adds `node`/`npm` to $PATH,
+        # no ynh_install_nodejs call needed. $nodejs_dir is available for
+        # conf/systemd-ui.service's ExecStart.
+        version = "20"
+
     # No [resources.database]: a `type` (mysql/postgresql) is mandatory for
     # that resource, and it would provision a DB we'd never use — the bridge
     # stores everything in its own sqlite file under $install_dir/data/.

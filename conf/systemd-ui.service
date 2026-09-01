@@ -8,7 +8,7 @@ Type=simple
 User=__APP__
 Group=__APP__
 WorkingDirectory=__INSTALL_DIR__/ui
-ExecStart=__YNH_NODE__ node_modules/.bin/next start -p __PORT__
+ExecStart=__NODEJS_DIR__/node node_modules/.bin/next start -p __PORT__
 Restart=on-failure
 RestartSec=5
 # NEXT_PUBLIC_* vars are NOT set here — Next.js inlines them into the client

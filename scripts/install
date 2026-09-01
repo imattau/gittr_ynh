@@ -10,20 +10,15 @@ ynh_script_progression "Validating installation parameters"
 ynh_script_progression "Setting up source files"
 ynh_setup_source --dest_dir="$install_dir"
 
-ynh_script_progression "Installing Go toolchain (pinned)"
-ynh_install_go --go_version=$GO_VERSION
-ynh_use_go
-
 ynh_script_progression "Building git-nostr-bridge"
+# Go is provisioned via the resources.go manifest resource and already on
+# $PATH (sourcing the helpers above did that automatically) — no scripted
+# install call needed, see doc/DECISIONS.md item 9.
 # `make git-nostr-bridge` builds both bin/git-nostr-bridge and bin/git-nostr-ssh
 # in one target; there is no separate git-nostr-ssh make target.
 pushd "$install_dir/$bridge_dir"
 	make git-nostr-bridge
 popd
-
-ynh_script_progression "Installing Node.js and yarn"
-ynh_exec_warn_less ynh_install_nodejs --nodejs_version=$NODEJS_VERSION
-ynh_use_nodejs
 
 ynh_script_progression "Initializing optional-feature settings"
 # GitHub OAuth, Blossom, and the publisher blocklist are config-panel-only
