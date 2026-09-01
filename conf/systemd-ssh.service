@@ -12,12 +12,20 @@ RestartSec=5
 
 # Sandboxing options to harden security. Kept more conservative than the
 # bridge/UI units: this is sshd itself, forking per-connection into
-# git-nostr-ssh -> git-upload-pack/git-receive-pack. Left out on purpose:
-# CapabilityBoundingSet= (empty) and SystemCallFilter's ~@setuid — sshd
-# still performs self-referential setuid/setgid session setup even though
-# it never changes to a *different* uid here (see conf/sshd_config.j2's
-# UsePAM no / single-AllowUsers design), and locking those down risks
-# breaking session setup for a component where that's hard to debug.
+# git-nostr-ssh -> git-upload-pack/git-receive-pack. No SystemCallFilter=
+# here — confirmed by an actual failure, not a priori caution: with
+# ~@clock @debug @module @mount @obsolete @reboot @swap @cpu-emulation
+# @privileged (CapabilityBoundingSet= was already left out, per the
+# original reasoning below), sshd was killed by SIGSYS (signal 31) on
+# every single start — some syscall in that list, most likely something
+# under @privileged sshd calls during its own session setup even while
+# authenticating as itself (see doc/DECISIONS.md item 13). Rather than
+# guess which specific syscall to carve out and risk another blind
+# exclusion being wrong, dropped the filter entirely for this unit.
+# CapabilityBoundingSet= (empty) is still left out for the same original
+# reason: sshd performs self-referential setuid/setgid session setup even
+# though it never changes to a *different* uid here (see
+# conf/sshd_config.j2's UsePAM no / single-AllowUsers design).
 # Details: https://www.freedesktop.org/software/systemd/man/systemd.exec.html
 NoNewPrivileges=yes
 PrivateTmp=yes
@@ -35,7 +43,6 @@ ProtectKernelModules=yes
 ProtectKernelTunables=yes
 LockPersonality=yes
 SystemCallArchitectures=native
-SystemCallFilter=~@clock @debug @module @mount @obsolete @reboot @swap @cpu-emulation @privileged
 
 [Install]
 WantedBy=multi-user.target

@@ -5,9 +5,10 @@ This app runs three systemd services:
 - `gittr-bridge` — the `git-nostr-bridge` Go binary. Watches the configured
   Nostr relays, mirrors repo metadata to a local sqlite db, and rewrites
   `$install_dir/.ssh/authorized_keys` from published SSH-key (kind 52)
-  events. Also always listens on `0.0.0.0:8080` for an internal
-  `/api/event` fast-lane — not exposed through the firewall by default, see
-  doc/DECISIONS.md item 3.
+  events. Also always listens on `$port_bridge_http` (defaults to 8080,
+  auto-shifted if that's taken — check `yunohost app show gittr`) for an
+  internal `/api/event` fast-lane — not exposed through the firewall by
+  default, see doc/DECISIONS.md items 3 and 13.
 - `gittr-ui` — the Next.js web UI, proxied by NGINX. Depends on
   `gittr-bridge` and won't start without it.
 - `gittr-ssh` — a **second, dedicated sshd instance** (separate from the

@@ -487,3 +487,47 @@ assumed), used as `corepack prepare yarn@$YARN_VERSION --activate` in both
 already correct — it's the native Classic flag; the `YN0050 deprecated`
 warning seen in earlier reasoning about this only fires under Berry, which
 is precisely the tool we shouldn't have been running in the first place.
+
+## 13. First full install succeeded; two runtime failures on first boot
+
+Install completed end-to-end for the first time — source, Go build, UI
+build, config, systemd, nginx all worked. Both new failures are the
+services actually starting on a real box, caught from `journalctl`:
+
+**`gittr-bridge` — `bind: address already in use` on :8080, looping every
+5s.** The bridge's HTTP listener has no way to disable itself (see item
+3) and defaults to port 8080 if `BRIDGE_HTTP_PORT` isn't set — which this
+package never set, so it collided with something else already using 8080
+on the test box. Not hypothetical once a package actually shares a real
+server. Fixed by adding a `resources.ports.bridge_http` entry (default
+8080, same as before, but YunoHost will now shift it to a free port if
+that one's taken, same as `git_ssh` already does) and setting
+`Environment=BRIDGE_HTTP_PORT=__PORT_BRIDGE_HTTP__` in
+`conf/systemd-bridge.service`. Still not `exposed = "TCP"` — it's not
+meant to be reachable from outside regardless of which port it lands on.
+
+**`gittr-ssh` — killed by signal 31 (SIGSYS) immediately on every start,
+restart-looping.** SIGSYS on process start is the specific, recognizable
+signature of a systemd `SystemCallFilter=` seccomp denial (default action
+for a filtered-out syscall is to kill with SIGSYS unless
+`SystemCallErrorNumber=` is set). `conf/systemd-ssh.service`'s hardening
+included `SystemCallFilter=~@clock @debug @module @mount @obsolete
+@reboot @swap @cpu-emulation @privileged` — item in the original hardening
+pass (before any real sshd ran under it) already excluded `@setuid` on the
+theory that sshd's self-referential session setup needs it even
+authenticating as itself, but evidently something else sshd calls falls
+under `@privileged` too (a broad systemd syscall group — capset, chroot,
+setgroups, and others). Rather than guess again which single syscall to
+carve out of that list and risk being wrong a second time, removed
+`SystemCallFilter=` from this unit entirely — the rest of the hardening
+(`NoNewPrivileges`, `ProtectSystem=full`, `RestrictNamespaces`, etc.)
+stays, since nothing points to those being the problem. `bridge`/`ui`'s
+own `SystemCallFilter=` (identical list) are untouched — the bridge
+process actually ran under it without incident (it failed on the port
+bind, not a syscall kill), so there's no evidence they need the same fix,
+and changing them without evidence would just be trading one guess for
+another.
+
+Both fixes are consistent with the running theme of this document: guess
+at your own risk, but the real signal is what a live instance's logs
+actually say.

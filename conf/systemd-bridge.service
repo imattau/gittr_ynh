@@ -13,11 +13,15 @@ RestartSec=5
 # HOME must equal install_dir's path (see manifest.toml's system_user note):
 # the bridge writes ~/.ssh/authorized_keys and reads ~/.config/git-nostr/.
 Environment=HOME=__INSTALL_DIR__
-# The bridge always starts an HTTP listener (default :8080, unauthenticated
-# /api/event) regardless of this variable being set — there is no way to
-# disable it. It is left bound to the default 0.0.0.0:8080 but NOT declared
-# as a resources.ports entry, so YunoHost's firewall keeps it closed from
-# the outside by default. See doc/DECISIONS.md item 3.
+# The bridge always starts an HTTP listener (unauthenticated /api/event)
+# regardless of this variable being set — there is no way to disable it.
+# Pointed at $port_bridge_http (resources.ports.bridge_http) rather than
+# the binary's hardcoded 8080 default, which collided with another
+# service already using that port on a real box — see doc/DECISIONS.md
+# item 13. Left unexposed (no `exposed = "TCP"` on that port resource), so
+# YunoHost's firewall keeps it closed from the outside by default — see
+# doc/DECISIONS.md item 3.
+Environment=BRIDGE_HTTP_PORT=__PORT_BRIDGE_HTTP__
 
 # Sandboxing options to harden security.
 # Details: https://www.freedesktop.org/software/systemd/man/systemd.exec.html

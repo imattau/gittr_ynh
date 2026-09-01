@@ -4,7 +4,7 @@ id = "gittr"
 name = "gittr"
 description.en = "Self-hosted git forge on Nostr (NIP-34), with the gitnostr bridge for SSH git access"
 
-version = "0.1~ynh4"
+version = "0.1~ynh5"
 
 maintainers = ["imattau"]
 
@@ -78,6 +78,15 @@ ram.runtime = "512M"
         [resources.ports.git_ssh]
         default = 2225
         exposed = "TCP"
+
+        # bridge_http -> $port_bridge_http: the bridge's internal
+        # /api/event fast-lane (see doc/DECISIONS.md item 3). The binary
+        # hardcodes a default of 8080 if BRIDGE_HTTP_PORT isn't set, which
+        # collides with other apps/services on a shared box — confirmed in
+        # practice, not hypothetical (see doc/DECISIONS.md item 13). Left
+        # unexposed, same reasoning as before: it's not meant to be public.
+        [resources.ports.bridge_http]
+        default = 8080
 
     [resources.apt]
         # No build-essential: the bridge builds with CGO_ENABLED=0, no gcc needed.
