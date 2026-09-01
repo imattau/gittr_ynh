@@ -988,3 +988,59 @@ again. The diagnostic evidence for that was sitting right there in the
 first re-test's output (an unchanged timestamp) and was available to
 compare against immediately — didn't need to ask for anything new to
 catch this, just needed to look at what was already provided.
+
+## 21. The actual permission bug — `$install_dir`'s own directory mode, not the socket
+
+The restart bug (item 20) got fixed and the socket genuinely restarted —
+still a 502. This time the general `/var/log/nginx/error.log` had
+*nothing* relevant at all, even for a request made and timestamped
+seconds earlier — because YunoHost logs each domain to its own file
+(`/var/log/nginx/$domain-error.log`), not the shared global one. Once
+that was found and checked, the real error was sitting right there:
+
+```
+connect() to unix:/var/www/gittr/fcgiwrap.sock failed (13: Permission
+denied) while connecting to upstream
+```
+
+**Permission denied, not connection refused.** Every fix so far (items
+19, 20) treated this as being about the *socket file's* own mode bits —
+`SocketMode=`, `SocketUser=`/`SocketGroup=`, the `ExecStartPost=` chmod,
+then making sure the socket actually got recreated at all. All of that
+was solving the wrong layer. `connect()` on a Unix domain socket needs
+**execute (traverse) permission on every directory in the path**, not
+just read/write on the socket file itself. `$install_dir` — i.e.
+`/var/www/gittr`, the parent of `fcgiwrap.sock` — gets mode `0750`
+(`u=rwx,g=rx,o=---`) from the `install_dir` resource's own
+`_ynh_apply_default_permissions`, confirmed in earlier install logs
+(`chmod -R u=rwX,g=rX,o=--- /var/www/gittr`). `www-data` is neither the
+owner (`gittr`) nor in its group — it's "other", and "other" has zero
+permissions on that directory. `www-data` could never have traversed
+into `$install_dir` to reach the socket **no matter what the socket
+file's own mode was set to.** Every earlier fix in this chain was
+correct on its own terms and still couldn't have worked.
+
+Fixed by moving the socket out of `$install_dir` entirely rather than
+continuing to fight that directory's permissions:
+`ListenStream=/run/__APP__-fcgiwrap.sock`. `/run` is always traversable,
+and because this is genuine systemd socket activation, the socket file
+is created by systemd itself (root, PID 1) before the fd is handed to
+the unprivileged `__APP__`-run service — so this sidesteps
+`$install_dir`'s restrictive permissions structurally, rather than
+adding another workaround on top of a design that couldn't have worked.
+`conf/nginx.conf`'s `fastcgi_pass` updated to match. Kept `SocketMode=
+0666` (still harmless, no reason to remove it) but dropped the
+`ExecStartPost=` chmod — it was solving a problem that no longer exists
+at this path, since `/run` itself is traversable by everyone already.
+
+The pattern across items 19–21, worth naming plainly: three consecutive
+guesses at "why can't nginx reach this socket" without asking for the
+one piece of evidence (the actual connect() error text) that would have
+named the real layer immediately. Item 19 guessed at directive
+reliability, item 20 (correctly) found a real *different* bug along the
+way (the restart never happening) but that fix still didn't produce a
+working socket once actually applied, because the underlying permission
+model was wrong from the start. Once the real per-domain log was found,
+this took one line to diagnose. The nginx error log — the *right* one —
+was always going to say exactly what was wrong; it just took three
+rounds to go looking for it instead of revising the socket config again.
