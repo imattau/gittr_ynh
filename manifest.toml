@@ -112,7 +112,9 @@ ram.runtime = "512M"
     [resources.apt]
         # No build-essential: the bridge builds with CGO_ENABLED=0, no gcc needed.
         # openssh-server provides the sshd binary the dedicated git-ssh instance runs.
-        packages = "git, sqlite3, openssh-server"
+        # fcgiwrap provides the CGI-over-FastCGI wrapper for HTTPS git
+        # (git-http-backend) — see doc/DECISIONS.md item 17.
+        packages = "git, sqlite3, openssh-server, fcgiwrap"
 
     [resources.go]
         # helpers 2.1 provisions Go as a resource, not via a scripted

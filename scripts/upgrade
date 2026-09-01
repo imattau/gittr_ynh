@@ -7,6 +7,9 @@ ynh_script_progression "Stopping services"
 ynh_systemctl --service="$app-ui" --action="stop" --log_path="systemd"
 ynh_systemctl --service="$app-ssh" --action="stop" --log_path="systemd"
 ynh_systemctl --service="$app-bridge" --action="stop" --log_path="systemd"
+# Fine if this doesn't exist yet (upgrading from before HTTPS git existed) —
+# ynh_systemctl's stop path is a no-op for an already-inactive/unknown unit.
+ynh_systemctl --service="$app-fcgiwrap" --action="stop" --log_path="systemd"
 
 ynh_script_progression "Updating source files"
 # Keep the bridge/UI config, data (repositories, sqlite db), and the
@@ -57,10 +60,20 @@ ynh_script_progression "Updating sshd configuration"
 ynh_config_add --template="sshd_config.j2" \
 	--destination="$install_dir/ssh/sshd_config"
 
+ynh_script_progression "Updating HTTPS git (dedicated fcgiwrap)"
+mkdir -p "$install_dir/bin"
+ynh_config_add --template="git-http-backend-quiet" \
+	--destination="$install_dir/bin/git-http-backend-quiet"
+chmod +x "$install_dir/bin/git-http-backend-quiet"
+ynh_config_add --template="systemd-fcgiwrap.socket" \
+	--destination="/etc/systemd/system/$app-fcgiwrap.socket"
+systemctl enable "$app-fcgiwrap.socket" --quiet
+
 ynh_script_progression "Updating systemd configuration"
 ynh_config_add_systemd --service="$app-ui" --template="systemd-ui.service"
 ynh_config_add_systemd --service="$app-bridge" --template="systemd-bridge.service"
 ynh_config_add_systemd --service="$app-ssh" --template="systemd-ssh.service"
+ynh_config_add_systemd --service="$app-fcgiwrap" --template="systemd-fcgiwrap.service"
 
 ynh_script_progression "Updating NGINX configuration"
 ynh_config_add_nginx
@@ -75,8 +88,10 @@ chmod 600 "$install_dir/ui/.env.runtime"
 ynh_script_progression "Starting services"
 yunohost service add "$app-bridge" --description="gitnostr bridge (repo/SSH-key sync from Nostr)" --log="/var/log/$app/bridge.log"
 yunohost service add "$app-ssh" --description="dedicated sshd for git-nostr-ssh"
+yunohost service add "$app-fcgiwrap" --description="dedicated fcgiwrap for HTTPS git"
 ynh_systemctl --service="$app-bridge" --action="start" --log_path="systemd"
 ynh_systemctl --service="$app-ui" --action="start" --log_path="systemd"
 ynh_systemctl --service="$app-ssh" --action="start" --log_path="systemd"
+systemctl start "$app-fcgiwrap.socket"
 
 ynh_script_progression "Upgrade complete"

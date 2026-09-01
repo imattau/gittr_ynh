@@ -1,6 +1,6 @@
 ## Services
 
-This app runs three systemd services:
+This app runs four systemd services:
 
 - `gittr-bridge` — the `git-nostr-bridge` Go binary. Watches the configured
   Nostr relays, mirrors repo metadata to a local sqlite db, and rewrites
@@ -17,6 +17,11 @@ This app runs three systemd services:
   `yunohost app show gittr` (defaults to `2225` if free). See
   doc/DECISIONS.md item 3 for why this isn't a single binary listening
   directly.
+- `gittr-fcgiwrap` — a **second, dedicated `fcgiwrap` instance** (socket-
+  activated, `gittr-fcgiwrap.socket`), separate from the shared system
+  `fcgiwrap` some other apps may use. Runs `git-http-backend` (wrapped to
+  quiet its stderr) as the CGI handler for HTTPS git. See doc/DECISIONS.md
+  item 17.
 
 ## SSH git access
 
@@ -164,7 +169,23 @@ exclusion is implemented yet.
 
 ## HTTPS git access
 
-Not implemented in this package — see doc/DECISIONS.md item 3 for why (it
-needs `git-http-backend` + `fcgiwrap` + an nginx `auth_request` ACL stack
-that's a meaningfully larger surface than v0.1 takes on). SSH is the only
-supported transport for now.
+```
+git clone https://yourdomain/<owner-pubkey-or-npub>/<repo>.git
+```
+
+Same URL format as SSH, just `https://` instead of `ssh://`. Served by
+`git-http-backend` behind a dedicated `fcgiwrap` instance (its own
+socket-activated systemd unit — `gittr-fcgiwrap.socket` /
+`gittr-fcgiwrap.service` — not the shared system `fcgiwrap`, so this
+doesn't touch any other app's setup). Private repos are gated by an nginx
+`auth_request` to the UI's own `/api/git/http-auth` endpoint, mirroring
+the same owner/permission ACL SSH already enforces — authorized users pass
+a signed Nostr event the same way as any bridge API push
+(`git -c http.extraHeader="X-Nostr-Auth-Event: ..."`).
+
+Originally descoped for v0.1 (see doc/DECISIONS.md item 3) as more surface
+than seemed worth it before SSH-only had even been proven working — added
+once that held up and it became clear it's what gittr's own UI actually
+tells users to run. Full design notes in doc/DECISIONS.md item 17,
+including what was deliberately left out (CORS support for in-browser git
+clients like gitworkshop.dev, and non-root-path installs).

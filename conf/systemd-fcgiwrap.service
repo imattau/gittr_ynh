@@ -1,0 +1,45 @@
+[Unit]
+Description=gittr — dedicated fcgiwrap for HTTPS git (git-http-backend)
+Requires=__APP__-fcgiwrap.socket
+
+[Service]
+Type=simple
+User=__APP__
+Group=__APP__
+# -c: prefork worker count (see doc/GIT_NOSTR_BRIDGE_SETUP.md upstream —
+# a single worker serializes every clone/fetch). No -s: the listening
+# socket comes from systemd socket activation (see
+# conf/systemd-fcgiwrap.socket), fcgiwrap picks it up automatically.
+# No -f: despite how that flag reads, it means "send the CGI's stderr
+# over FastCGI" (confirmed in fcgiwrap's own source), the opposite of
+# what conf/git-http-backend-quiet exists to avoid. See doc/DECISIONS.md
+# item 17.
+ExecStart=/usr/sbin/fcgiwrap -c 4
+Restart=on-failure
+RestartSec=5
+
+# Sandboxing kept deliberately lighter than the other units here — no
+# SystemCallFilter= and no RestrictAddressFamilies=. Two of this package's
+# own units already crash-looped in real testing from an overly broad
+# filter blocking something the process legitimately needed (see items 13
+# and 15); fcgiwrap forks and execs git-http-backend (itself forking git
+# upload-pack/receive-pack) per request, a wider syscall/socket surface
+# than sshd or Next.js, so guessing either of those two here risks the
+# same failure without a live box to verify against. The rest of the
+# hardening below was never implicated in either prior incident.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProtectSystem=full
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -74,10 +74,22 @@ ssh-keygen -q -t ed25519 -N "" -f "$ssh_host_key_dir/ssh_host_ed25519_key"
 ynh_config_add --template="sshd_config.j2" \
 	--destination="$ssh_host_key_dir/sshd_config"
 
+ynh_script_progression "Setting up HTTPS git (dedicated fcgiwrap)"
+mkdir -p "$install_dir/bin"
+ynh_config_add --template="git-http-backend-quiet" \
+	--destination="$install_dir/bin/git-http-backend-quiet"
+chmod +x "$install_dir/bin/git-http-backend-quiet"
+# No ynh_config_add_systemd here — that helper only knows .service/.mount
+# templates, not .socket. See doc/DECISIONS.md item 17.
+ynh_config_add --template="systemd-fcgiwrap.socket" \
+	--destination="/etc/systemd/system/$app-fcgiwrap.socket"
+systemctl enable "$app-fcgiwrap.socket" --quiet
+
 ynh_script_progression "Configuring systemd services"
 ynh_config_add_systemd --service="$app-ui" --template="systemd-ui.service"
 ynh_config_add_systemd --service="$app-bridge" --template="systemd-bridge.service"
 ynh_config_add_systemd --service="$app-ssh" --template="systemd-ssh.service"
+ynh_config_add_systemd --service="$app-fcgiwrap" --template="systemd-fcgiwrap.service"
 
 ynh_script_progression "Configuring NGINX"
 ynh_config_add_nginx
@@ -105,8 +117,12 @@ yunohost user permission update "$app.main" --logo "$YNH_APP_BASEDIR/logo.png"
 ynh_script_progression "Enabling and starting services"
 yunohost service add "$app-bridge" --description="gitnostr bridge (repo/SSH-key sync from Nostr)" --log="/var/log/$app/bridge.log"
 yunohost service add "$app-ssh" --description="dedicated sshd for git-nostr-ssh"
+yunohost service add "$app-fcgiwrap" --description="dedicated fcgiwrap for HTTPS git"
 ynh_systemctl --service="$app-bridge" --action="start" --log_path="systemd"
 ynh_systemctl --service="$app-ui" --action="start" --log_path="systemd"
 ynh_systemctl --service="$app-ssh" --action="start" --log_path="systemd"
+# Socket-activated: start the .socket, not the .service — fcgiwrap.service
+# starts on-demand when nginx makes its first connection.
+systemctl start "$app-fcgiwrap.socket"
 
 ynh_script_progression "Installation complete"

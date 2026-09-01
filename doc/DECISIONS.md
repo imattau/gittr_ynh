@@ -75,6 +75,12 @@ means editing that url/sha256 pair and re-testing the build, not editing
 
 ## 3. HTTP git vs SSH-only
 
+**Update: HTTPS git was added later, once SSH-only had actually been
+proven working end-to-end and it became clear gittr's own UI tells users
+to use HTTPS — see item 17.** The reasoning below for why it was
+descoped *initially* still stands as the reasoning for that sequencing
+choice.
+
 **SSH-only for v0.1.** This turned out to be a bigger decision than the
 sketch assumed, because two of its premises were wrong:
 
@@ -705,3 +711,105 @@ TOML file is involved and the failure is downstream of parsing it, install
 and run the *exact* parsing library in question against the *exact* file
 before doing anything else — `tomllib` (or any other spec-compliant
 parser) passing doesn't mean the actual consumer's parser agrees.
+
+## 17. HTTPS git, added
+
+User pushed back on item 3's original descoping: gittr's own website tells
+users to `git clone https://...`, so SSH-only isn't actually meeting the
+app where its own UI points people. Fair — and by this point SSH-only had
+been proven working end-to-end on a real instance (items 9–16), so the
+"prove the simple path works first" reasoning behind the original descope
+had done its job. Built it properly rather than as an afterthought,
+starting from upstream's actual production config
+(`nginx.gittr.conf.example` at the repo root, pinned tag) rather than
+reconstructing from the docs summary alone.
+
+**What upstream's reference config does, and what this package keeps vs.
+drops:**
+
+- `git-http-backend` behind `fcgiwrap`, private repos gated by nginx
+  `auth_request` to the UI's own `/api/git/http-auth` — kept, this is the
+  actual mechanism, no simpler alternative exists.
+- A `git-http-backend-quiet` wrapper (redirects stderr) — kept.
+  `git-http-backend` writes progress to stderr; through fcgiwrap that can
+  corrupt the FastCGI response for smart-HTTP clients.
+- `uploadpack.allowFilter=true` etc. per bare repo, for browser git
+  clients (gitworkshop.dev) — **not needed**, the bridge already applies
+  this automatically on repo creation (`ensureUploadPackBrowserCaps`,
+  confirmed in `docs/GIT_NOSTR_BRIDGE_SETUP.md`), nothing for the package
+  to do.
+- CORS headers, the `gitworkshop.dev` `Referer`-sniffing redirect, and the
+  NIP-05-identifier URL resolver (`/api/git/nip05-resolve`) — **dropped**.
+  These exist specifically for in-browser git clients and human-readable
+  identifiers in clone URLs; upstream's own docs are explicit that plain
+  CLI `git clone`/`ls-remote` works without any of it ("CLI `git ls-remote`
+  working is not enough. Browser clients also need: ..."). Out of scope
+  for what was actually asked (`git clone` working over HTTPS).
+  `NEXT_PUBLIC_GIT_SERVER_URL` isn't overridden by this package, so clone
+  URLs the UI shows already default to `https://$domain` — nothing extra
+  needed for that either.
+- `listen 443 ssl;` without `http2` (large packs reportedly failing
+  mid-stream over HTTP/2 for some clients) — **not applicable**: that's a
+  `listen`/server-block-level directive, controlled by YunoHost's own
+  domain-level nginx config, not something an app-level `conf/nginx.conf`
+  snippet can set.
+- A dedicated `git.subdomain` — **not used**. Upstream dedicates a whole
+  subdomain (and thus a whole separate `listen 443` server block) to git
+  traffic; this package has one domain, so the git-http `location` block
+  is added to the *same* server block as everything else, matching how
+  `NEXT_PUBLIC_GIT_SERVER_URL` already defaults to the main domain when
+  unset. Only supports a root-path install (`path = "/"`, this package's
+  default) — a non-root install would need `PATH_INFO` to have the path
+  prefix stripped before reaching `git-http-backend`, which this doesn't
+  attempt.
+
+**fcgiwrap runs as a second, dedicated instance, not the shared system
+one** — same reasoning as the dedicated `sshd` in item 3: fcgiwrap
+normally runs as `www-data` (the Debian package's own `fcgiwrap.socket`/
+`.service`, left alone — other apps may depend on it), and upstream's own
+setup notes the friction this causes directly: *"fcgiwrap runs as www-data
+(must be in group git-nostr). Owner hex dirs under GIT_PROJECT_ROOT need
+mode 0750; 0700 causes 404 here while SSH still works."* That's exactly
+the kind of shared-system-identity coupling this package has avoided
+everywhere else. A dedicated instance running as `__APP__` sidesteps it
+entirely — no group-membership changes, no repo directory permission
+downgrade, `$install_dir/repositories` stays owned and permissioned
+exactly as SSH already needs it.
+
+**Verified `fcgiwrap`'s actual CLI flags from its own source**
+(`gnosek/fcgiwrap` on GitHub) rather than trusting the sketch/memory,
+given this document's track record on exactly that kind of assumption:
+`-c <n>` is the prefork worker count (used, `-c 4` — upstream's own docs
+call out that Ubuntu's single-worker default serializes every clone/fetch
+under concurrent load). `-f` is **not** "run in foreground" as the flag
+letter suggests — it means *"send the CGI's stderr over FastCGI"*,
+confirmed directly in `fcgiwrap.c`'s own `-h` text. That's the literal
+opposite of what `git-http-backend-quiet` exists to prevent, so it's
+deliberately never passed. No `-s` (socket) flag either: fcgiwrap
+natively supports systemd socket activation
+(`sd_listen_fds`, compiled in on Debian/Ubuntu builds) — confirmed in the
+source, not assumed — so `conf/systemd-fcgiwrap.socket` creates and owns
+the listening socket via `SocketUser=`/`SocketGroup=www-data`/
+`SocketMode=0660` (nginx connects as `www-data` via the group bit), and
+`fcgiwrap.service` just picks up the inherited file descriptor with no
+explicit socket flag at all.
+
+**`ynh_config_add_systemd` and `ynh_config_remove_systemd` only know
+`.service`/`.mount`** (confirmed by reading their source, in
+`helpers.v2.1.d/systemd`) — there's no built-in helper for `.socket`
+units. `scripts/install`/`upgrade`/`restore` write the `.socket` file via
+a plain `ynh_config_add` call and `systemctl enable`/`daemon-reload`
+by hand; `scripts/remove` stops/disables/removes it the same way.
+
+**Systemd hardening kept deliberately lighter** on the new
+`gittr-fcgiwrap.service` than the other three units: no
+`SystemCallFilter=`, no `RestrictAddressFamilies=`. Both of those exact
+directives already crash-looped a real service in this package twice
+(items 13 and 15) from blocking something the process legitimately
+needed, and `fcgiwrap` forking into `git-http-backend` forking into `git
+upload-pack`/`receive-pack` per request is a wider, less-familiar syscall
+and socket surface than either of those prior cases — guessing a filter
+here without a live box to verify against risks the same failure a third
+time for no verified benefit.
+
+Not yet confirmed on a live instance — next thing to watch for.

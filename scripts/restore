@@ -27,12 +27,21 @@ ynh_script_progression "Regenerating systemd configuration"
 ynh_config_add_systemd --service="$app-ui" --template="systemd-ui.service"
 ynh_config_add_systemd --service="$app-bridge" --template="systemd-bridge.service"
 ynh_config_add_systemd --service="$app-ssh" --template="systemd-ssh.service"
+# .socket isn't under $install_dir (so ynh_restore above didn't bring it
+# back) and ynh_config_add_systemd only knows .service/.mount — same as
+# scripts/install, see doc/DECISIONS.md item 17.
+ynh_config_add --template="systemd-fcgiwrap.socket" \
+	--destination="/etc/systemd/system/$app-fcgiwrap.socket"
+systemctl enable "$app-fcgiwrap.socket" --quiet
+ynh_config_add_systemd --service="$app-fcgiwrap" --template="systemd-fcgiwrap.service"
 
 ynh_script_progression "Starting services"
 yunohost service add "$app-bridge" --description="gitnostr bridge (repo/SSH-key sync from Nostr)" --log="/var/log/$app/bridge.log"
 yunohost service add "$app-ssh" --description="dedicated sshd for git-nostr-ssh"
+yunohost service add "$app-fcgiwrap" --description="dedicated fcgiwrap for HTTPS git"
 ynh_systemctl --service="$app-bridge" --action="start" --log_path="systemd"
 ynh_systemctl --service="$app-ui" --action="start" --log_path="systemd"
 ynh_systemctl --service="$app-ssh" --action="start" --log_path="systemd"
+systemctl start "$app-fcgiwrap.socket"
 
 ynh_script_progression "Restore complete"

@@ -1,0 +1,12 @@
+#!/bin/sh
+# fcgiwrap invokes this as the CGI script for HTTPS git (info/refs,
+# git-upload-pack, git-receive-pack). All the env vars git-http-backend
+# needs (GIT_PROJECT_ROOT, PATH_INFO, REQUEST_METHOD, ...) come from
+# nginx's fastcgi_param directives via fcgiwrap — nothing to set up here.
+#
+# The only reason this wrapper exists: git-http-backend writes progress to
+# stderr, and fcgiwrap (without -f) does NOT forward that into the FastCGI
+# response — but some environments still leak enough of it to corrupt the
+# response stream for smart-HTTP clients. Redirect it away entirely.
+# See doc/DECISIONS.md item 17.
+exec git http-backend "$@" 2>/dev/null

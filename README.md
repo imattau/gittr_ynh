@@ -34,11 +34,13 @@ Read `doc/DECISIONS.md` before touching `scripts/install` or the
 `conf/*.j2` templates — it records why several things aren't the "obvious"
 implementation:
 
-- **Git access is SSH-only.** `git-nostr-ssh` has no listener of its own —
-  it's a forced-command binary that a real `sshd` invokes. This package
-  runs a second, dedicated `sshd` instance for that, rather than touching
-  the server's admin SSH config. HTTPS smart-git (`git-http-backend` +
-  `fcgiwrap` + nginx `auth_request`) is out of scope for now.
+- **Git access is SSH and HTTPS.** `git-nostr-ssh` has no listener of its
+  own — it's a forced-command binary that a real `sshd` invokes. This
+  package runs a second, dedicated `sshd` instance for that, rather than
+  touching the server's admin SSH config. HTTPS smart-git uses
+  `git-http-backend` behind a dedicated `fcgiwrap` instance (its own
+  socket-activated systemd unit, not the shared system one), with nginx
+  `auth_request` gating private repos via the UI's own ACL endpoint.
 - **Go and Node.js are declared as manifest resources** (`resources.go`,
   `resources.nodejs`) and provisioned by YunoHost's own resource system,
   not hand-vendored or scripted via helper calls.

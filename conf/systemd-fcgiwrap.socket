@@ -1,0 +1,18 @@
+[Unit]
+Description=gittr — dedicated fcgiwrap socket for HTTPS git
+
+[Socket]
+ListenStream=__INSTALL_DIR__/fcgiwrap.sock
+# nginx (www-data) needs to connect to this socket as a client. Rather
+# than add www-data to __APP__'s group (or vice versa) system-wide,
+# systemd just chowns this one socket file group-www-data — the
+# fcgiwrap.service process itself never touches the path at all, it gets
+# the listening fd handed to it directly via socket activation. See
+# doc/DECISIONS.md item 17.
+SocketUser=__APP__
+SocketGroup=www-data
+SocketMode=0660
+RemoveOnStop=true
+
+[Install]
+WantedBy=sockets.target
